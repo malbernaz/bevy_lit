@@ -24,7 +24,7 @@ Please note that `bevy_lit` is in an early development stage. Users will find bu
 
 **Note:** `bevy_lit` is not yet available as a crate on [crates.io](https://crates.io/).
 
-To use it, you can clone the repository directly from GitHub if you want to fine tune the library to your needs, or add the repo toe your `Cargo.lock`:
+To use it, you can clone the repository directly from GitHub, if you want to fine tune the library to your needs, or add the repo to your `Cargo.lock`:
 
 ```toml
 [dependencies]
