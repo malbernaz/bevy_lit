@@ -1,0 +1,33 @@
+[package]
+name = "bevy_lit"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy = { version = "0.14", default-features = false, features = [
+  "bevy_render",
+  "bevy_core_pipeline",
+  "bevy_winit",
+] }
+
+[dev-dependencies]
+bevy = { version = "0.14", default-features = false, features = [
+  "bevy_render",
+  "bevy_core_pipeline",
+  "bevy_winit",
+  "bevy_sprite",
+] }
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[[example]]
+name = "basic"
+path = "examples/basic.rs"
+
+[[example]]
+name = "breakout"
+path = "examples/breakout.rs"
