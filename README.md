@@ -2,11 +2,7 @@
 
 `bevy_lit` is a simple and easy-to-use 2D lighting library for Bevy, designed to work seamlessly with a single camera setup. The library provides basic lighting functionalities through the types: `AmbientLight2d`, `LightOccluder2d`, and `PointLight2d`.
 
-<div alight="center">
-
 ![bevy_lit demo](https://github.com/malbernaz/bevy_lit/blob/main/static/demo.png)
-
-</div>
 
 ## Features
 
