@@ -1,11 +1,11 @@
-pub mod components;
-pub mod extract;
-pub mod pipeline;
-pub mod plugin;
-pub mod prepare;
-pub mod resources;
-pub mod surfaces;
-pub mod utils;
+mod components;
+mod extract;
+mod pipeline;
+mod plugin;
+mod prepare;
+mod resources;
+mod surfaces;
+mod utils;
 
 pub mod prelude {
     pub use crate::components::*;
