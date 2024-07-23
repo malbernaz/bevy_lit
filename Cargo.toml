@@ -2,7 +2,7 @@
 name = "bevy_lit"
 version = "0.1.0"
 edition = "2021"
-categories = ["bevy", "lighting 2d"]
+categories = ["graphics", "game-development", "game-engines", "rendering"]
 description = "A lighting 2d library for Bevy"
 authors = ["Miguel Albernaz"]
 repository = "https://github.com/malbernaz/bevy_lit"
