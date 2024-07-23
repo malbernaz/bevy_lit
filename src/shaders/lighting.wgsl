@@ -6,7 +6,7 @@
 
 @group(0) @binding(2) var<uniform> ambient_light: AmbientLight2d;
 @group(0) @binding(3) var<storage> lights: array<PointLight2d>;
-@group(0) @binding(4) var lighting_texture: texture_storage_2d<rgba16float, read_write>;
+@group(0) @binding(4) var lighting_texture: texture_storage_2d<rgba16float, write>;
 @group(0) @binding(5) var sdf: texture_2d<f32>;
 @group(0) @binding(6) var sdf_sampler: sampler;
 

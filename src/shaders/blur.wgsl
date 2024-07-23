@@ -1,7 +1,7 @@
 #import bevy_lit::types::LightingSettings
 
 @group(0) @binding(0) var<uniform> settings: LightingSettings;
-@group(0) @binding(1) var texture: texture_storage_2d<rgba16float, read_write>;
+@group(0) @binding(1) var texture: texture_storage_2d<rgba16float, write>;
 @group(0) @binding(2) var texture_copy: texture_2d<f32>;
 @group(0) @binding(3) var texture_sampler: sampler;
 

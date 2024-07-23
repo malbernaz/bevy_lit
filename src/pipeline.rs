@@ -63,7 +63,7 @@ impl FromWorld for LightingPipelines {
                     uniform_buffer::<ViewUniform>(true),
                     LightingUniform::<ExtractedLighting2dSettings>::binding_layout(),
                     LightingArrayBuffer::<ExtractedLightOccluder2d>::binding_layout(),
-                    texture_storage_2d(TextureFormat::Rgba16Float, StorageTextureAccess::ReadWrite),
+                    texture_storage_2d(TextureFormat::Rgba16Float, StorageTextureAccess::WriteOnly),
                 ),
             ),
         );
@@ -86,7 +86,7 @@ impl FromWorld for LightingPipelines {
                     LightingUniform::<ExtractedLighting2dSettings>::binding_layout(),
                     LightingUniform::<ExtractedAmbientLight2d>::binding_layout(),
                     LightingArrayBuffer::<ExtractedPointLight2d>::binding_layout(),
-                    texture_storage_2d(TextureFormat::Rgba16Float, StorageTextureAccess::ReadWrite),
+                    texture_storage_2d(TextureFormat::Rgba16Float, StorageTextureAccess::WriteOnly),
                     texture_2d(TextureSampleType::Float { filterable: true }),
                     sampler(SamplerBindingType::Filtering),
                 ),
@@ -108,7 +108,7 @@ impl FromWorld for LightingPipelines {
                 ShaderStages::COMPUTE,
                 (
                     LightingUniform::<ExtractedLighting2dSettings>::binding_layout(),
-                    texture_storage_2d(TextureFormat::Rgba16Float, StorageTextureAccess::ReadWrite),
+                    texture_storage_2d(TextureFormat::Rgba16Float, StorageTextureAccess::WriteOnly),
                     texture_2d(TextureSampleType::Float { filterable: true }),
                     sampler(SamplerBindingType::Filtering),
                 ),

@@ -5,7 +5,7 @@
 }
 
 @group(0) @binding(2) var<storage> occluders: array<LightOccluder2d>;
-@group(0) @binding(3) var texture: texture_storage_2d<rgba16float, read_write>;
+@group(0) @binding(3) var texture: texture_storage_2d<rgba16float, write>;
 
 @compute @workgroup_size(16, 16, 1)
 fn compute(@builtin(global_invocation_id) global_id: vec3<u32>) {
