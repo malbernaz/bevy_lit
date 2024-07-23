@@ -60,7 +60,7 @@ fn main() {
 fn setup(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 
-    commands.spawn_bundle(PointLight2dBundle {
+    commands.spawn(PointLight2dBundle {
         point_light: PointLight2d {
             color: Color::rgb(1.0, 1.0, 1.0),
             intensity: 3.0,
@@ -70,7 +70,7 @@ fn setup(mut commands: Commands) {
         ..default()
     });
 
-    commands.spawn_bundle(LightOccluder2dBundle {
+    commands.spawn(LightOccluder2dBundle {
         light_occluder: LightOccluder2d::new(Vec2::new(50.0, 50.0)),
         transform: Transform::from_xyz(0.0, 200.0, 0.0),
         ..default()
