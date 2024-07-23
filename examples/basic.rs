@@ -28,18 +28,6 @@ struct MovingLights;
 fn setup(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 
-    let sprite = SpriteBundle {
-        sprite: Sprite {
-            custom_size: Some(Vec2::splat(100.0)),
-            ..default()
-        },
-        ..default()
-    };
-
-    let occluder = LightOccluder2d {
-        half_size: Vec2::splat(50.0),
-    };
-
     vec![
         vec3(-150.0, 0.0, 0.0),
         vec3(0.0, -150.0, 0.0),
@@ -51,9 +39,15 @@ fn setup(mut commands: Commands) {
         commands.spawn((
             SpriteBundle {
                 transform: Transform::from_translation(pos),
-                ..sprite.clone()
+                sprite: Sprite {
+                    custom_size: Some(Vec2::splat(100.0)),
+                    ..default()
+                },
+                ..default()
             },
-            occluder.clone(),
+            LightOccluder2d {
+                half_size: Vec2::splat(50.0),
+            },
         ));
     });
 
