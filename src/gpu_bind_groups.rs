@@ -13,8 +13,11 @@ use bevy::{
 };
 
 use crate::{
-    extract::{ExtractedLightOccluder2d, ExtractedPointLight2d},
-    gpu_resources::{AmbientLight2dUniform, Lighting2dSettingsUniform, LightingArrayBuffer},
+    extract::{
+        ExtractedAmbientLight2d, ExtractedLightOccluder2d, ExtractedLighting2dSettings,
+        ExtractedPointLight2d,
+    },
+    gpu_resources::{LightingArrayBuffer, LightingUniform},
     pipeline::{LightingPipelines, PostProcessKey, PostProcessPipeline},
     surfaces::{BLUR_SURFACE, SDF_SURFACE, SURFACE},
 };
@@ -32,8 +35,8 @@ pub fn prepare_lighting_assets(
     render_device: Res<RenderDevice>,
     images: ResMut<RenderAssets<GpuImage>>,
     view_uniforms: Res<ViewUniforms>,
-    ambient_light: Res<AmbientLight2dUniform>,
-    lighting_settings: Res<Lighting2dSettingsUniform>,
+    ambient_light: Res<LightingUniform<ExtractedAmbientLight2d>>,
+    lighting_settings: Res<LightingUniform<ExtractedLighting2dSettings>>,
     point_lights: Res<LightingArrayBuffer<ExtractedPointLight2d>>,
     light_occluders: Res<LightingArrayBuffer<ExtractedLightOccluder2d>>,
 ) {

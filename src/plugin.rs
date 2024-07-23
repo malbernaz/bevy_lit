@@ -12,6 +12,7 @@ use bevy::{
 
 use crate::{
     extract::{extract_light_occluders, extract_lighting_resources, extract_point_lights},
+    gpu_bind_groups::{prepare_lighting_assets, prepare_post_process_pipelines},
     gpu_resources::prepare_gpu_resources,
     pipeline::{
         LightingLabel, LightingNode, BLUR_SHADER, FUNCTIONS_SHADER, LIGHTING_SHADER,
@@ -19,7 +20,6 @@ use crate::{
     },
     pipeline::{LightingPipelines, PostProcessPipeline},
     prelude::{AmbientLight2d, LightOccluder2d, PointLight2d},
-    prepare::{prepare_lighting_assets, prepare_post_process_pipelines},
     resources::Lighting2dSettings,
     surfaces::{setup_surfaces, update_surfaces},
 };

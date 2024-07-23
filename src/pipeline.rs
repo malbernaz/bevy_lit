@@ -21,9 +21,12 @@ use bevy::{
 };
 
 use crate::{
-    extract::{ExtractedLightOccluder2d, ExtractedPointLight2d},
-    gpu_resources::{GpuAmbientLight2d, GpuLighting2dGpuSettings, Lighting2dSettingsUniform},
-    prepare::{Lighting2dSurfaceBindGroups, PostProcessPipelineId},
+    extract::{
+        ExtractedAmbientLight2d, ExtractedLightOccluder2d, ExtractedLighting2dSettings,
+        ExtractedPointLight2d,
+    },
+    gpu_bind_groups::{Lighting2dSurfaceBindGroups, PostProcessPipelineId},
+    gpu_resources::{LightingArrayBuffer, LightingUniform},
     surfaces::{BLUR_SURFACE, SURFACE},
     utils::workgroup_grid_from_image_size,
 };
@@ -58,8 +61,8 @@ impl FromWorld for LightingPipelines {
                 ShaderStages::COMPUTE,
                 (
                     uniform_buffer::<ViewUniform>(true),
-                    uniform_buffer::<GpuLighting2dGpuSettings>(false),
-                    GpuArrayBuffer::<ExtractedLightOccluder2d>::binding_layout(render_device),
+                    LightingUniform::<ExtractedLighting2dSettings>::binding_layout(),
+                    LightingArrayBuffer::<ExtractedLightOccluder2d>::binding_layout(),
                     texture_storage_2d(TextureFormat::Rgba16Float, StorageTextureAccess::ReadWrite),
                 ),
             ),
@@ -80,8 +83,8 @@ impl FromWorld for LightingPipelines {
                 ShaderStages::COMPUTE,
                 (
                     uniform_buffer::<ViewUniform>(true),
-                    uniform_buffer::<GpuLighting2dGpuSettings>(false),
-                    uniform_buffer::<GpuAmbientLight2d>(false),
+                    LightingUniform::<ExtractedLighting2dSettings>::binding_layout(),
+                    LightingUniform::<ExtractedAmbientLight2d>::binding_layout(),
                     GpuArrayBuffer::<ExtractedPointLight2d>::binding_layout(render_device),
                     texture_storage_2d(TextureFormat::Rgba16Float, StorageTextureAccess::ReadWrite),
                     texture_2d(TextureSampleType::Float { filterable: true }),
@@ -104,7 +107,7 @@ impl FromWorld for LightingPipelines {
             &BindGroupLayoutEntries::sequential(
                 ShaderStages::COMPUTE,
                 (
-                    uniform_buffer::<GpuLighting2dGpuSettings>(false),
+                    LightingUniform::<ExtractedLighting2dSettings>::binding_layout(),
                     texture_storage_2d(TextureFormat::Rgba16Float, StorageTextureAccess::ReadWrite),
                     texture_2d(TextureSampleType::Float { filterable: true }),
                     sampler(SamplerBindingType::Filtering),
@@ -267,12 +270,7 @@ impl ViewNode for LightingNode {
         drop(lighting_pass);
 
         // Blur
-        let should_blur = world
-            .resource::<Lighting2dSettingsUniform>()
-            .uniform
-            .get()
-            .blur_coc
-            > 0.0;
+        let should_blur = world.resource::<ExtractedLighting2dSettings>().blur_coc > 0.0;
 
         if should_blur {
             ctx.command_encoder().copy_texture_to_texture(

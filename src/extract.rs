@@ -3,24 +3,27 @@ use bevy::{
     render::{render_resource::ShaderType, view::ViewVisibility, Extract},
 };
 
-use crate::{
-    components::LightOccluder2d,
-    gpu_resources::{
-        AmbientLight2dUniform, GpuAmbientLight2d, GpuLighting2dGpuSettings,
-        Lighting2dSettingsUniform,
-    },
-    prelude::*,
-    resources::Lighting2dSettings,
-};
+use crate::{components::LightOccluder2d, prelude::*, resources::Lighting2dSettings};
+
+#[derive(Resource, Clone, ShaderType)]
+pub struct ExtractedAmbientLight2d {
+    pub color: Vec4,
+}
+
+#[derive(Resource, Clone, ShaderType)]
+pub struct ExtractedLighting2dSettings {
+    pub blur_coc: f32,
+    pub viewport: UVec2,
+}
 
 pub fn extract_lighting_resources(
     mut commands: Commands,
     ambient_light: Extract<Res<AmbientLight2d>>,
     lighting_settings: Extract<Res<Lighting2dSettings>>,
 ) {
-    commands.insert_resource(AmbientLight2dUniform::new(GpuAmbientLight2d {
+    commands.insert_resource(ExtractedAmbientLight2d {
         color: ambient_light.color.to_linear().to_vec4() * ambient_light.brightness,
-    }));
+    });
 
     let Lighting2dSettings {
         shadow_softness,
@@ -30,10 +33,10 @@ pub fn extract_lighting_resources(
 
     let viewport_d = ((x + y) as f32).powi(2).sqrt();
 
-    commands.insert_resource(Lighting2dSettingsUniform::new(GpuLighting2dGpuSettings {
+    commands.insert_resource(ExtractedLighting2dSettings {
         blur_coc: (shadow_softness * viewport_d) / 2000.0,
         viewport,
-    }));
+    });
 }
 
 #[derive(Debug, Component, Default, Clone, ShaderType)]

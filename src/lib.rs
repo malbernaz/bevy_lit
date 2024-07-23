@@ -1,9 +1,9 @@
 mod components;
 mod extract;
+mod gpu_bind_groups;
 mod gpu_resources;
 mod pipeline;
 mod plugin;
-mod prepare;
 mod resources;
 mod surfaces;
 mod utils;
