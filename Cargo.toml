@@ -39,7 +39,3 @@ too_many_arguments = "allow"
 [[example]]
 name = "basic"
 path = "examples/basic.rs"
-
-[[example]]
-name = "breakout"
-path = "examples/breakout.rs"
