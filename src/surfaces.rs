@@ -4,7 +4,7 @@ use bevy::{
     window::{PrimaryWindow, WindowResized},
 };
 
-use super::{resources::Lighting2dSettings, utils::create_lighting_surface};
+use crate::{resources::Lighting2dSettings, utils::create_lighting_surface};
 
 pub const SURFACE: Handle<Image> = Handle::weak_from_u128(32847394924661);
 pub const SDF_SURFACE: Handle<Image> = Handle::weak_from_u128(93473874316479);

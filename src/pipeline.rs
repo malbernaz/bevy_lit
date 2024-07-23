@@ -20,13 +20,10 @@ use bevy::{
     },
 };
 
-use super::{
-    extract::{
-        ExtractedLightOccluder2d, ExtractedPointLight2d, GpuAmbientLight2d,
-        GpuLighting2dGpuSettings, Lighting2dSettingsUniform,
-    },
-    prepare::PostProcessPipelineId,
-    resources::Lighting2dSurfaceBindGroups,
+use crate::{
+    extract::{ExtractedLightOccluder2d, ExtractedPointLight2d},
+    gpu_resources::{GpuAmbientLight2d, GpuLighting2dGpuSettings, Lighting2dSettingsUniform},
+    prepare::{Lighting2dSurfaceBindGroups, PostProcessPipelineId},
     surfaces::{BLUR_SURFACE, SURFACE},
     utils::workgroup_grid_from_image_size,
 };

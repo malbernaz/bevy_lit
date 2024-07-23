@@ -1,69 +1,17 @@
 use bevy::{
     prelude::*,
-    render::{
-        render_resource::{BindingResource, ShaderType, UniformBuffer},
-        renderer::{RenderDevice, RenderQueue},
-        view::ViewVisibility,
-        Extract,
-    },
+    render::{render_resource::ShaderType, view::ViewVisibility, Extract},
 };
 
-use crate::prelude::*;
-
-use super::{components::LightOccluder2d, resources::Lighting2dSettings};
-
-#[derive(Clone, ShaderType)]
-pub struct GpuAmbientLight2d {
-    pub color: Vec4,
-}
-
-#[derive(Resource)]
-pub struct AmbientLight2dUniform {
-    pub uniform: UniformBuffer<GpuAmbientLight2d>,
-}
-
-impl AmbientLight2dUniform {
-    pub fn new(ambient_light: GpuAmbientLight2d) -> Self {
-        Self {
-            uniform: UniformBuffer::from(ambient_light.clone()),
-        }
-    }
-
-    pub fn write_buffer(&mut self, render_device: &RenderDevice, render_queue: &RenderQueue) {
-        self.uniform.write_buffer(render_device, render_queue);
-    }
-
-    pub fn binding(&self) -> Option<BindingResource> {
-        self.uniform.binding()
-    }
-}
-
-#[derive(Clone, ShaderType)]
-pub struct GpuLighting2dGpuSettings {
-    pub blur_coc: f32,
-    pub viewport: UVec2,
-}
-
-#[derive(Resource)]
-pub struct Lighting2dSettingsUniform {
-    pub uniform: UniformBuffer<GpuLighting2dGpuSettings>,
-}
-
-impl Lighting2dSettingsUniform {
-    pub fn new(settings: GpuLighting2dGpuSettings) -> Self {
-        Self {
-            uniform: UniformBuffer::from(settings.clone()),
-        }
-    }
-
-    pub fn write_buffer(&mut self, render_device: &RenderDevice, render_queue: &RenderQueue) {
-        self.uniform.write_buffer(render_device, render_queue);
-    }
-
-    pub fn binding(&self) -> Option<BindingResource> {
-        self.uniform.binding()
-    }
-}
+use crate::{
+    components::LightOccluder2d,
+    gpu_resources::{
+        AmbientLight2dUniform, GpuAmbientLight2d, GpuLighting2dGpuSettings,
+        Lighting2dSettingsUniform,
+    },
+    prelude::*,
+    resources::Lighting2dSettings,
+};
 
 pub fn extract_lighting_resources(
     mut commands: Commands,

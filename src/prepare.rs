@@ -3,41 +3,40 @@ use bevy::{
     render::{
         render_asset::RenderAssets,
         render_resource::{
-            BindGroupEntries, CachedRenderPipelineId, GpuArrayBuffer, PipelineCache,
+            BindGroup, BindGroupEntries, CachedRenderPipelineId, PipelineCache,
             SpecializedRenderPipelines,
         },
-        renderer::{RenderDevice, RenderQueue},
+        renderer::RenderDevice,
         texture::GpuImage,
         view::{ExtractedView, ViewUniforms},
     },
 };
 
-use super::{
-    extract::{
-        AmbientLight2dUniform, ExtractedLightOccluder2d, ExtractedPointLight2d,
-        Lighting2dSettingsUniform,
-    },
+use crate::{
+    extract::{ExtractedLightOccluder2d, ExtractedPointLight2d},
+    gpu_resources::{AmbientLight2dUniform, Lighting2dSettingsUniform, LightingArrayBuffer},
     pipeline::{LightingPipelines, PostProcessKey, PostProcessPipeline},
-    resources::Lighting2dSurfaceBindGroups,
     surfaces::{BLUR_SURFACE, SDF_SURFACE, SURFACE},
 };
 
-#[allow(clippy::too_many_arguments)]
+#[derive(Resource, Debug)]
+pub struct Lighting2dSurfaceBindGroups {
+    pub sdf: BindGroup,
+    pub lighting: BindGroup,
+    pub blur: BindGroup,
+}
+
 pub fn prepare_lighting_assets(
     mut commands: Commands,
     pipeline: Res<LightingPipelines>,
     render_device: Res<RenderDevice>,
-    render_queue: Res<RenderQueue>,
     images: ResMut<RenderAssets<GpuImage>>,
     view_uniforms: Res<ViewUniforms>,
-    mut ambient_light: ResMut<AmbientLight2dUniform>,
-    mut lighting_settings: ResMut<Lighting2dSettingsUniform>,
-    point_lights: Res<GpuArrayBuffer<ExtractedPointLight2d>>,
-    light_occluders: Res<GpuArrayBuffer<ExtractedLightOccluder2d>>,
+    ambient_light: Res<AmbientLight2dUniform>,
+    lighting_settings: Res<Lighting2dSettingsUniform>,
+    point_lights: Res<LightingArrayBuffer<ExtractedPointLight2d>>,
+    light_occluders: Res<LightingArrayBuffer<ExtractedLightOccluder2d>>,
 ) {
-    ambient_light.write_buffer(&render_device, &render_queue);
-    lighting_settings.write_buffer(&render_device, &render_queue);
-
     let (
         Some(view_uniform),
         Some(lighting_settings),

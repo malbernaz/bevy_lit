@@ -3,7 +3,6 @@ use bevy::{
     core_pipeline::core_2d::graph::{Core2d, Node2d},
     prelude::*,
     render::{
-        gpu_component_array_buffer::GpuComponentArrayBufferPlugin,
         render_graph::{RenderGraphApp, ViewNodeRunner},
         render_resource::SpecializedRenderPipelines,
         view::{check_visibility, VisibilitySystems},
@@ -12,21 +11,18 @@ use bevy::{
 };
 
 use crate::{
-    extract::{
-        extract_light_occluders, extract_lighting_resources, extract_point_lights,
-        ExtractedLightOccluder2d, ExtractedPointLight2d,
-    },
+    extract::{extract_light_occluders, extract_lighting_resources, extract_point_lights},
+    gpu_resources::prepare_gpu_resources,
     pipeline::{
         LightingLabel, LightingNode, BLUR_SHADER, FUNCTIONS_SHADER, LIGHTING_SHADER,
         POST_PROCESS_SHADER, SDF_SHADER, TYPES_SHADER,
     },
+    pipeline::{LightingPipelines, PostProcessPipeline},
     prelude::{AmbientLight2d, LightOccluder2d, PointLight2d},
     prepare::{prepare_lighting_assets, prepare_post_process_pipelines},
     resources::Lighting2dSettings,
     surfaces::{setup_surfaces, update_surfaces},
 };
-
-use super::pipeline::{LightingPipelines, PostProcessPipeline};
 
 pub struct Lighting2dPlugin {
     pub ambient_light: AmbientLight2d,
@@ -66,26 +62,22 @@ impl Plugin for Lighting2dPlugin {
             Shader::from_wgsl
         );
 
-        app.add_plugins((
-            GpuComponentArrayBufferPlugin::<ExtractedLightOccluder2d>::default(),
-            GpuComponentArrayBufferPlugin::<ExtractedPointLight2d>::default(),
-        ))
-        .register_type::<AmbientLight2d>()
-        .register_type::<PointLight2d>()
-        .register_type::<LightOccluder2d>()
-        .register_type::<Lighting2dSettings>()
-        .insert_resource(self.ambient_light.clone())
-        .insert_resource(Lighting2dSettings {
-            shadow_softness: self.shadow_softness,
-            ..default()
-        })
-        .add_systems(PreStartup, setup_surfaces)
-        .add_systems(PreUpdate, update_surfaces)
-        .add_systems(
-            PostUpdate,
-            check_visibility::<Or<(With<PointLight2d>, With<LightOccluder2d>)>>
-                .in_set(VisibilitySystems::CheckVisibility),
-        );
+        app.register_type::<AmbientLight2d>()
+            .register_type::<PointLight2d>()
+            .register_type::<LightOccluder2d>()
+            .register_type::<Lighting2dSettings>()
+            .insert_resource(self.ambient_light.clone())
+            .insert_resource(Lighting2dSettings {
+                shadow_softness: self.shadow_softness,
+                ..default()
+            })
+            .add_systems(PreStartup, setup_surfaces)
+            .add_systems(PreUpdate, update_surfaces)
+            .add_systems(
+                PostUpdate,
+                check_visibility::<Or<(With<PointLight2d>, With<LightOccluder2d>)>>
+                    .in_set(VisibilitySystems::CheckVisibility),
+            );
 
         let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
             return;
@@ -103,8 +95,11 @@ impl Plugin for Lighting2dPlugin {
             )
             .add_systems(
                 Render,
-                (prepare_post_process_pipelines, prepare_lighting_assets)
-                    .in_set(RenderSet::Prepare),
+                (
+                    prepare_post_process_pipelines.in_set(RenderSet::Prepare),
+                    prepare_gpu_resources.in_set(RenderSet::PrepareResources),
+                    prepare_lighting_assets.in_set(RenderSet::PrepareBindGroups),
+                ),
             )
             .add_render_graph_node::<ViewNodeRunner<LightingNode>>(Core2d, LightingLabel)
             .add_render_graph_edges(Core2d, (Node2d::EndMainPass, LightingLabel));

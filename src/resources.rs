@@ -1,4 +1,4 @@
-use bevy::{prelude::*, render::render_resource::BindGroup};
+use bevy::prelude::*;
 
 #[derive(Resource, Clone, Reflect)]
 #[reflect(Resource)]
@@ -31,11 +31,4 @@ impl Default for AmbientLight2d {
             brightness: 0.8,
         }
     }
-}
-
-#[derive(Resource, Debug)]
-pub struct Lighting2dSurfaceBindGroups {
-    pub sdf: BindGroup,
-    pub lighting: BindGroup,
-    pub blur: BindGroup,
 }
