@@ -18,13 +18,11 @@ Please note that `bevy_lit` is in an early development stage. Users will find bu
 
 ### Installation
 
-**Note:** `bevy_lit` is not yet available as a crate on [crates.io](https://crates.io/).
-
 To use it, you can clone the repository directly from GitHub - if you want to fine tune the library to your needs. Or add it to your `Cargo.lock`:
 
 ```toml
 [dependencies]
-bevy_lit = { git = "https://github.com/malbernaz/bevy_lit" }
+bevy_lit = "0.1"
 ```
 
 ### Demo
