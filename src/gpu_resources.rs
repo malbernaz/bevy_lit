@@ -4,16 +4,23 @@ use bevy::{
         render_resource::{
             binding_types::{storage_buffer_read_only, uniform_buffer},
             encase::internal::WriteInto,
-            BindGroupLayoutEntryBuilder, BindingResource, GpuArrayBufferable, ShaderType,
-            StorageBuffer, UniformBuffer,
+            BindGroup, BindGroupEntries, BindGroupLayoutEntryBuilder, BindingResource,
+            CachedRenderPipelineId, GpuArrayBufferable, PipelineCache, SamplerDescriptor,
+            ShaderType, SpecializedRenderPipelines, StorageBuffer, TextureDescriptor,
+            TextureDimension, TextureFormat, TextureUsages, UniformBuffer,
         },
         renderer::{RenderDevice, RenderQueue},
+        texture::{CachedTexture, TextureCache},
+        view::{ExtractedView, ViewTarget, ViewUniforms},
     },
 };
 
-use crate::extract::{
-    ExtractedAmbientLight2d, ExtractedLightOccluder2d, ExtractedLighting2dSettings,
-    ExtractedPointLight2d,
+use crate::{
+    extract::{
+        ExtractedAmbientLight2d, ExtractedLightOccluder2d, ExtractedLighting2dSettings,
+        ExtractedPointLight2d,
+    },
+    pipeline::{Lighting2dPipelineKey, Lighting2dPrepassPipelines, PostProcessPipeline},
 };
 
 #[derive(Resource)]
@@ -94,4 +101,121 @@ pub fn prepare_gpu_resources(
     );
     gpu_light_occluders.write_buffer(&render_device, &render_queue);
     commands.insert_resource(gpu_light_occluders);
+}
+
+#[derive(Component)]
+pub struct Lighting2dSurfaceBindGroups {
+    pub sdf: BindGroup,
+    pub lighting: BindGroup,
+}
+
+pub fn prepare_lighting_bind_groups(
+    mut commands: Commands,
+    prepass_pipelines: Res<Lighting2dPrepassPipelines>,
+    render_device: Res<RenderDevice>,
+    view_uniforms: Res<ViewUniforms>,
+    ambient_light: Res<LightingUniform<ExtractedAmbientLight2d>>,
+    point_lights: Res<LightingArrayBuffer<ExtractedPointLight2d>>,
+    light_occluders: Res<LightingArrayBuffer<ExtractedLightOccluder2d>>,
+    views_query: Query<(Entity, &Lighting2dAuxiliaryTextures)>,
+) {
+    let (Some(view_uniform), Some(ambient_light), Some(light_occluders), Some(point_lights)) = (
+        view_uniforms.uniforms.binding(),
+        ambient_light.binding(),
+        light_occluders.binding(),
+        point_lights.binding(),
+    ) else {
+        return;
+    };
+
+    let sampler = render_device.create_sampler(&SamplerDescriptor::default());
+
+    for (entity, aux_textures) in &views_query {
+        commands.entity(entity).insert(Lighting2dSurfaceBindGroups {
+            sdf: render_device.create_bind_group(
+                "sdf_bind_group",
+                &prepass_pipelines.sdf_layout,
+                &BindGroupEntries::sequential((view_uniform.clone(), light_occluders.clone())),
+            ),
+            lighting: render_device.create_bind_group(
+                "lighting2d_bind_group",
+                &prepass_pipelines.lighting_layout,
+                &BindGroupEntries::sequential((
+                    view_uniform.clone(),
+                    ambient_light.clone(),
+                    point_lights.clone(),
+                    &aux_textures.sdf.default_view,
+                    &sampler,
+                )),
+            ),
+        });
+    }
+}
+
+#[derive(Component)]
+pub struct Lighting2dPostProcessPipelineId(pub CachedRenderPipelineId);
+
+pub fn prepare_post_process_pipelines(
+    mut commands: Commands,
+    pipeline_cache: Res<PipelineCache>,
+    mut post_process_pipelines: ResMut<SpecializedRenderPipelines<PostProcessPipeline>>,
+    post_process_pipeline: Res<PostProcessPipeline>,
+    views_query: Query<(Entity, &ExtractedView)>,
+) {
+    for (entity, view) in &views_query {
+        commands
+            .entity(entity)
+            .insert(Lighting2dPostProcessPipelineId(
+                post_process_pipelines.specialize(
+                    &pipeline_cache,
+                    &post_process_pipeline,
+                    Lighting2dPipelineKey { hdr: view.hdr },
+                ),
+            ));
+    }
+}
+
+fn create_aux_texture(
+    view_target: &ViewTarget,
+    texture_cache: &mut TextureCache,
+    render_device: &RenderDevice,
+    label: &'static str,
+) -> CachedTexture {
+    let descriptor = TextureDescriptor {
+        label: Some(label),
+        size: view_target.main_texture().size(),
+        mip_level_count: 1,
+        sample_count: view_target.main_texture().sample_count(),
+        dimension: TextureDimension::D2,
+        format: TextureFormat::Rgba16Float,
+        usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+        view_formats: &[],
+    };
+
+    texture_cache.get(render_device, descriptor)
+}
+
+#[derive(Component)]
+pub struct Lighting2dAuxiliaryTextures {
+    pub sdf: CachedTexture,
+    pub lighting: CachedTexture,
+}
+
+pub fn prepare_lighting_auxiliary_textures(
+    mut commands: Commands,
+    render_device: Res<RenderDevice>,
+    mut texture_cache: ResMut<TextureCache>,
+    view_targets: Query<(Entity, &ViewTarget)>,
+) {
+    for (entity, view_target) in &view_targets {
+        commands.entity(entity).insert(Lighting2dAuxiliaryTextures {
+            sdf: create_aux_texture(view_target, &mut texture_cache, &render_device, "sdf"),
+            lighting: create_aux_texture(
+                view_target,
+                &mut texture_cache,
+                &render_device,
+                "lighting",
+            ),
+        });
+    }
 }

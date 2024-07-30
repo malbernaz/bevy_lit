@@ -7,7 +7,7 @@ use crate::{components::LightOccluder2d, prelude::*, resources::Lighting2dSettin
 
 #[derive(Resource, Clone, ShaderType)]
 pub struct ExtractedAmbientLight2d {
-    pub color: Vec4,
+    pub color: LinearRgba,
 }
 
 #[derive(Resource, Clone, ShaderType)]
@@ -22,7 +22,7 @@ pub fn extract_lighting_resources(
     lighting_settings: Extract<Res<Lighting2dSettings>>,
 ) {
     commands.insert_resource(ExtractedAmbientLight2d {
-        color: ambient_light.color.to_linear().to_vec4() * ambient_light.brightness,
+        color: ambient_light.color.to_linear() * ambient_light.brightness,
     });
 
     let Lighting2dSettings {
@@ -75,7 +75,7 @@ pub fn extract_light_occluders(
 #[derive(Component, Debug, Clone, ShaderType)]
 pub struct ExtractedPointLight2d {
     pub center: Vec2,
-    pub color: Vec4,
+    pub color: LinearRgba,
     pub falloff: f32,
     pub intensity: f32,
     pub radius: f32,
@@ -96,7 +96,7 @@ pub fn extract_point_lights(
         values.push((
             entity,
             ExtractedPointLight2d {
-                color: point_light.color.to_linear().to_vec4(),
+                color: point_light.color.to_linear(),
                 center: transform.translation().xy(),
                 radius: point_light.radius,
                 intensity: point_light.intensity,

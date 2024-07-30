@@ -5,23 +5,23 @@ use bevy::{
     render::{
         render_graph::{RenderGraphApp, ViewNodeRunner},
         render_resource::SpecializedRenderPipelines,
-        view::{check_visibility, VisibilitySystems},
+        view::{check_visibility, prepare_view_targets, VisibilitySystems},
         Render, RenderApp, RenderSet,
     },
 };
 
 use crate::{
     extract::{extract_light_occluders, extract_lighting_resources, extract_point_lights},
-    gpu_bind_groups::{prepare_lighting_assets, prepare_post_process_pipelines},
-    gpu_resources::prepare_gpu_resources,
-    pipeline::{
-        LightingLabel, LightingNode, BLUR_SHADER, FUNCTIONS_SHADER, LIGHTING_SHADER,
-        POST_PROCESS_SHADER, SDF_SHADER, TYPES_SHADER,
+    gpu_resources::{
+        prepare_gpu_resources, prepare_lighting_auxiliary_textures, prepare_lighting_bind_groups,
+        prepare_post_process_pipelines,
     },
-    pipeline::{LightingPipelines, PostProcessPipeline},
+    pipeline::{
+        Lighting2dPrepassPipelines, LightingLabel, LightingNode, PostProcessPipeline, BLUR_SHADER,
+        FUNCTIONS_SHADER, LIGHTING_SHADER, POST_PROCESS_SHADER, SDF_SHADER, TYPES_SHADER,
+    },
     prelude::{AmbientLight2d, LightOccluder2d, PointLight2d},
     resources::Lighting2dSettings,
-    surfaces::{setup_surfaces, update_surfaces},
 };
 
 pub struct Lighting2dPlugin {
@@ -71,8 +71,6 @@ impl Plugin for Lighting2dPlugin {
                 shadow_softness: self.shadow_softness,
                 ..default()
             })
-            .add_systems(PreStartup, setup_surfaces)
-            .add_systems(PreUpdate, update_surfaces)
             .add_systems(
                 PostUpdate,
                 check_visibility::<Or<(With<PointLight2d>, With<LightOccluder2d>)>>
@@ -97,8 +95,11 @@ impl Plugin for Lighting2dPlugin {
                 Render,
                 (
                     prepare_post_process_pipelines.in_set(RenderSet::Prepare),
+                    prepare_lighting_auxiliary_textures
+                        .after(prepare_view_targets)
+                        .in_set(RenderSet::ManageViews),
                     prepare_gpu_resources.in_set(RenderSet::PrepareResources),
-                    prepare_lighting_assets.in_set(RenderSet::PrepareBindGroups),
+                    prepare_lighting_bind_groups.in_set(RenderSet::PrepareBindGroups),
                 ),
             )
             .add_render_graph_node::<ViewNodeRunner<LightingNode>>(Core2d, LightingLabel)
@@ -111,7 +112,7 @@ impl Plugin for Lighting2dPlugin {
         };
 
         render_app
-            .init_resource::<LightingPipelines>()
+            .init_resource::<Lighting2dPrepassPipelines>()
             .init_resource::<PostProcessPipeline>();
     }
 }

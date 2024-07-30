@@ -1,13 +1,11 @@
 #define_import_path bevy_lit::functions
 
 #import bevy_render::view::View
-#import bevy_lit::types::LightingSettings
 
 @group(0) @binding(0) var<uniform> view: View;
-@group(0) @binding(1) var<uniform> settings: LightingSettings;
 
 fn screen_to_ndc(pos: vec2<f32>) -> vec2<f32> {
-    let screen_size = vec2<f32>(settings.viewport);
+    let screen_size = view.viewport.zw;
     let screen_size_inv = vec2<f32>(1.0 / screen_size.x, 1.0 / screen_size.y);
     let ndc = vec2<f32>(pos.x, screen_size.y - pos.y);
     return (ndc * screen_size_inv) * 2.0 - 1.0;
