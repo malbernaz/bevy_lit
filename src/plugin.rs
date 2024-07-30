@@ -65,7 +65,7 @@ impl Plugin for Lighting2dPlugin {
             .insert_resource(self.ambient_light.clone())
             .insert_resource(Lighting2dSettings {
                 shadow_softness: self.shadow_softness,
-                ..default()
+                fixed_resolution: self.fixed_resolution,
             })
             .add_systems(
                 PostUpdate,

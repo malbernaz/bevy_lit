@@ -20,7 +20,7 @@ fn blur_y(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 fn blur(frag_coord: vec4<f32>, frag_offset: vec2<f32>) -> vec4<f32> {
     var coc = settings.coc;
 
-    if settings.fixed_resolution < 1 {
+    if !bool(settings.fixed_resolution) {
         let screen_size = view.viewport.zw;
         let screen_diagonal = sqrt(pow(screen_size.x + screen_size.y, 2.0));
 
