@@ -27,6 +27,7 @@ use crate::{
 pub struct Lighting2dPlugin {
     pub ambient_light: AmbientLight2d,
     pub shadow_softness: f32,
+    pub fixed_resolution: bool,
 }
 
 impl Default for Lighting2dPlugin {
@@ -34,6 +35,7 @@ impl Default for Lighting2dPlugin {
         Self {
             ambient_light: AmbientLight2d::default(),
             shadow_softness: 0.0,
+            fixed_resolution: true,
         }
     }
 }

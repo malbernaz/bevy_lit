@@ -11,6 +11,7 @@ fn main() {
                     color: Color::Srgba(Srgba::hex("#C09AFE").unwrap()),
                 },
                 shadow_softness: 32.0,
+                ..default()
             },
         ))
         .add_systems(Startup, setup)
