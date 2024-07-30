@@ -4,15 +4,15 @@ use bevy::prelude::*;
 #[reflect(Resource)]
 pub struct Lighting2dSettings {
     pub shadow_softness: f32,
-    #[reflect(ignore)]
-    pub viewport: UVec2,
+    // helps to calculate the shadow softness in relation to the viewport size
+    pub fixed_resolution: bool,
 }
 
 impl Default for Lighting2dSettings {
     fn default() -> Self {
         Self {
             shadow_softness: 0.0,
-            viewport: UVec2::ZERO,
+            fixed_resolution: true,
         }
     }
 }

@@ -18,7 +18,7 @@ use crate::{
     },
     pipeline::{
         Lighting2dPrepassPipelines, LightingLabel, LightingNode, PostProcessPipeline, BLUR_SHADER,
-        FUNCTIONS_SHADER, LIGHTING_SHADER, POST_PROCESS_SHADER, SDF_SHADER, TYPES_SHADER,
+        LIGHTING_SHADER, POST_PROCESS_SHADER, SDF_SHADER, TYPES_SHADER,
     },
     prelude::{AmbientLight2d, LightOccluder2d, PointLight2d},
     resources::Lighting2dSettings,
@@ -41,12 +41,6 @@ impl Default for Lighting2dPlugin {
 impl Plugin for Lighting2dPlugin {
     fn build(&self, app: &mut App) {
         load_internal_asset!(app, TYPES_SHADER, "shaders/types.wgsl", Shader::from_wgsl);
-        load_internal_asset!(
-            app,
-            FUNCTIONS_SHADER,
-            "shaders/functions.wgsl",
-            Shader::from_wgsl
-        );
         load_internal_asset!(app, SDF_SHADER, "shaders/sdf.wgsl", Shader::from_wgsl);
         load_internal_asset!(
             app,

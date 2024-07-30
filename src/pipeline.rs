@@ -7,10 +7,10 @@ use bevy::{
         render_resource::{
             binding_types::{sampler, texture_2d, uniform_buffer},
             BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries, CachedRenderPipelineId,
-            ColorTargetState, ColorWrites, FragmentState, MultisampleState, Operations,
+            ColorTargetState, ColorWrites, FragmentState, LoadOp, MultisampleState, Operations,
             PipelineCache, PrimitiveState, RenderPassColorAttachment, RenderPassDescriptor,
             RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor, ShaderStages,
-            SpecializedRenderPipeline, TextureFormat, TextureSampleType,
+            SpecializedRenderPipeline, StoreOp, TextureFormat, TextureSampleType,
         },
         renderer::{RenderContext, RenderDevice},
         texture::BevyDefault,
@@ -19,7 +19,10 @@ use bevy::{
 };
 
 use crate::{
-    extract::{ExtractedAmbientLight2d, ExtractedLightOccluder2d, ExtractedPointLight2d},
+    extract::{
+        ExtractedAmbientLight2d, ExtractedLightOccluder2d, ExtractedLighting2dSettings,
+        ExtractedPointLight2d,
+    },
     gpu_resources::{
         Lighting2dAuxiliaryTextures, Lighting2dPostProcessPipelineId, Lighting2dSurfaceBindGroups,
         LightingArrayBuffer, LightingUniform,
@@ -27,7 +30,6 @@ use crate::{
 };
 
 pub const TYPES_SHADER: Handle<Shader> = Handle::weak_from_u128(76578417911493);
-pub const FUNCTIONS_SHADER: Handle<Shader> = Handle::weak_from_u128(87346319816813);
 pub const SDF_SHADER: Handle<Shader> = Handle::weak_from_u128(57492774892945);
 pub const LIGHTING_SHADER: Handle<Shader> = Handle::weak_from_u128(47320975447604);
 pub const BLUR_SHADER: Handle<Shader> = Handle::weak_from_u128(43806754295913);
@@ -38,7 +40,14 @@ fn create_pipeline_descriptor(
     label: &'static str,
     layout: &BindGroupLayout,
     shader: Handle<Shader>,
+    entry_point: Option<&'static str>,
 ) -> CachedRenderPipelineId {
+    let entry_point = if let Some(entry_point) = entry_point {
+        entry_point.into()
+    } else {
+        "fragment".into()
+    };
+
     pipeline_cache.queue_render_pipeline(RenderPipelineDescriptor {
         label: Some(label.into()),
         layout: vec![layout.clone()],
@@ -46,7 +55,7 @@ fn create_pipeline_descriptor(
         fragment: Some(FragmentState {
             shader,
             shader_defs: vec![],
-            entry_point: "fragment".into(),
+            entry_point,
             targets: vec![Some(ColorTargetState {
                 format: TextureFormat::Rgba16Float,
                 blend: None,
@@ -66,6 +75,9 @@ pub struct Lighting2dPrepassPipelines {
     pub sdf_pipeline: CachedRenderPipelineId,
     pub lighting_layout: BindGroupLayout,
     pub lighting_pipeline: CachedRenderPipelineId,
+    pub blur_layout: BindGroupLayout,
+    pub blur_x_pipeline: CachedRenderPipelineId,
+    pub blur_y_pipeline: CachedRenderPipelineId,
 }
 
 impl FromWorld for Lighting2dPrepassPipelines {
@@ -84,8 +96,13 @@ impl FromWorld for Lighting2dPrepassPipelines {
             ),
         );
 
-        let sdf_pipeline =
-            create_pipeline_descriptor(pipeline_cache, "sdf_pipeline", &sdf_layout, SDF_SHADER);
+        let sdf_pipeline = create_pipeline_descriptor(
+            pipeline_cache,
+            "sdf_pipeline",
+            &sdf_layout,
+            SDF_SHADER,
+            None,
+        );
 
         let lighting_layout = render_device.create_bind_group_layout(
             "lighting_bind_group_layout",
@@ -106,6 +123,36 @@ impl FromWorld for Lighting2dPrepassPipelines {
             "lighting_pipeline",
             &lighting_layout,
             LIGHTING_SHADER,
+            None,
+        );
+
+        let blur_layout = render_device.create_bind_group_layout(
+            "blur_bind_group_layout",
+            &BindGroupLayoutEntries::sequential(
+                ShaderStages::FRAGMENT,
+                (
+                    uniform_buffer::<ViewUniform>(true),
+                    LightingUniform::<ExtractedLighting2dSettings>::binding_layout(),
+                    texture_2d(TextureSampleType::Float { filterable: true }),
+                    sampler(SamplerBindingType::Filtering),
+                ),
+            ),
+        );
+
+        let blur_x_pipeline = create_pipeline_descriptor(
+            pipeline_cache,
+            "blur_x_pipeline",
+            &blur_layout,
+            BLUR_SHADER,
+            Some("blur_x"),
+        );
+
+        let blur_y_pipeline = create_pipeline_descriptor(
+            pipeline_cache,
+            "blur_y_pipeline",
+            &blur_layout,
+            BLUR_SHADER,
+            Some("blur_y"),
         );
 
         Self {
@@ -113,6 +160,9 @@ impl FromWorld for Lighting2dPrepassPipelines {
             sdf_pipeline,
             lighting_layout,
             lighting_pipeline,
+            blur_layout,
+            blur_x_pipeline,
+            blur_y_pipeline,
         }
     }
 }
@@ -205,11 +255,20 @@ impl ViewNode for LightingNode {
         let pipeline_cache = world.resource::<PipelineCache>();
         let prepass_pipelines = world.resource::<Lighting2dPrepassPipelines>();
 
-        let (Some(sdf_pipeline), Some(lighting_pipeline), Some(post_process_pipeline)) = (
+        let (
+            Some(sdf_pipeline),
+            Some(lighting_pipeline),
+            Some(blur_x_pipeline),
+            Some(blur_y_pipeline),
+            Some(post_process_pipeline),
+        ) = (
             pipeline_cache.get_render_pipeline(prepass_pipelines.sdf_pipeline),
             pipeline_cache.get_render_pipeline(prepass_pipelines.lighting_pipeline),
+            pipeline_cache.get_render_pipeline(prepass_pipelines.blur_x_pipeline),
+            pipeline_cache.get_render_pipeline(prepass_pipelines.blur_y_pipeline),
             pipeline_cache.get_render_pipeline(post_process_pipeline_id.0),
-        ) else {
+        )
+        else {
             return Ok(());
         };
 
@@ -247,6 +306,51 @@ impl ViewNode for LightingNode {
 
         drop(lighting_pass);
 
+        // Blur
+        let should_blur = world.resource::<ExtractedLighting2dSettings>().blur_coc > 0.0;
+
+        if should_blur {
+            // Blur x
+            let mut blur_x_pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
+                label: Some("blur_x_pass"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &aux_textures.blur_x.default_view,
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Load,
+                        store: StoreOp::Store,
+                    },
+                })],
+                ..default()
+            });
+
+            blur_x_pass.set_bind_group(0, &bind_groups.blur_x, &[view_uniform.offset]);
+            blur_x_pass.set_render_pipeline(blur_x_pipeline);
+            blur_x_pass.draw(0..3, 0..1);
+
+            drop(blur_x_pass);
+
+            // Blur y
+            let mut blur_y_pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
+                label: Some("blur_y_pass"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &aux_textures.blur_y.default_view,
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Load,
+                        store: StoreOp::Store,
+                    },
+                })],
+                ..default()
+            });
+
+            blur_y_pass.set_bind_group(0, &bind_groups.blur_y, &[view_uniform.offset]);
+            blur_y_pass.set_render_pipeline(blur_y_pipeline);
+            blur_y_pass.draw(0..3, 0..1);
+
+            drop(blur_y_pass);
+        }
+
         // Post Process
         let post_process = view_target.post_process_write();
 
@@ -259,7 +363,11 @@ impl ViewNode for LightingNode {
             &world.resource::<PostProcessPipeline>().layout,
             &BindGroupEntries::sequential((
                 post_process.source,
-                &aux_textures.lighting.default_view,
+                if should_blur {
+                    &aux_textures.blur_y.default_view
+                } else {
+                    &aux_textures.lighting.default_view
+                },
                 &sampler,
             )),
         );

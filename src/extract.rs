@@ -13,7 +13,7 @@ pub struct ExtractedAmbientLight2d {
 #[derive(Resource, Clone, ShaderType)]
 pub struct ExtractedLighting2dSettings {
     pub blur_coc: f32,
-    pub viewport: UVec2,
+    pub fixed_resolution: u32,
 }
 
 pub fn extract_lighting_resources(
@@ -24,18 +24,13 @@ pub fn extract_lighting_resources(
     commands.insert_resource(ExtractedAmbientLight2d {
         color: ambient_light.color.to_linear() * ambient_light.brightness,
     });
-
-    let Lighting2dSettings {
-        shadow_softness,
-        viewport,
-    } = lighting_settings.clone();
-    let UVec2 { x, y } = viewport;
-
-    let viewport_d = ((x + y) as f32).powi(2).sqrt();
-
     commands.insert_resource(ExtractedLighting2dSettings {
-        blur_coc: (shadow_softness * viewport_d) / 2000.0,
-        viewport,
+        blur_coc: lighting_settings.shadow_softness,
+        fixed_resolution: if lighting_settings.fixed_resolution {
+            1
+        } else {
+            0
+        },
     });
 }
 

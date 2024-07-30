@@ -107,6 +107,8 @@ pub fn prepare_gpu_resources(
 pub struct Lighting2dSurfaceBindGroups {
     pub sdf: BindGroup,
     pub lighting: BindGroup,
+    pub blur_x: BindGroup,
+    pub blur_y: BindGroup,
 }
 
 pub fn prepare_lighting_bind_groups(
@@ -115,16 +117,25 @@ pub fn prepare_lighting_bind_groups(
     render_device: Res<RenderDevice>,
     view_uniforms: Res<ViewUniforms>,
     ambient_light: Res<LightingUniform<ExtractedAmbientLight2d>>,
+    light_settings: Res<LightingUniform<ExtractedLighting2dSettings>>,
     point_lights: Res<LightingArrayBuffer<ExtractedPointLight2d>>,
     light_occluders: Res<LightingArrayBuffer<ExtractedLightOccluder2d>>,
     views_query: Query<(Entity, &Lighting2dAuxiliaryTextures)>,
 ) {
-    let (Some(view_uniform), Some(ambient_light), Some(light_occluders), Some(point_lights)) = (
+    let (
+        Some(view_uniform),
+        Some(ambient_light),
+        Some(lighting_settings),
+        Some(light_occluders),
+        Some(point_lights),
+    ) = (
         view_uniforms.uniforms.binding(),
         ambient_light.binding(),
+        light_settings.binding(),
         light_occluders.binding(),
         point_lights.binding(),
-    ) else {
+    )
+    else {
         return;
     };
 
@@ -145,6 +156,26 @@ pub fn prepare_lighting_bind_groups(
                     ambient_light.clone(),
                     point_lights.clone(),
                     &aux_textures.sdf.default_view,
+                    &sampler,
+                )),
+            ),
+            blur_x: render_device.create_bind_group(
+                "blur_x_bind_group",
+                &prepass_pipelines.blur_layout,
+                &BindGroupEntries::sequential((
+                    view_uniform.clone(),
+                    lighting_settings.clone(),
+                    &aux_textures.lighting.default_view,
+                    &sampler,
+                )),
+            ),
+            blur_y: render_device.create_bind_group(
+                "blur_y_bind_group",
+                &prepass_pipelines.blur_layout,
+                &BindGroupEntries::sequential((
+                    view_uniform.clone(),
+                    lighting_settings.clone(),
+                    &aux_textures.blur_x.default_view,
                     &sampler,
                 )),
             ),
@@ -181,24 +212,27 @@ fn create_aux_texture(
     render_device: &RenderDevice,
     label: &'static str,
 ) -> CachedTexture {
-    let descriptor = TextureDescriptor {
-        label: Some(label),
-        size: view_target.main_texture().size(),
-        mip_level_count: 1,
-        sample_count: view_target.main_texture().sample_count(),
-        dimension: TextureDimension::D2,
-        format: TextureFormat::Rgba16Float,
-        usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
-        view_formats: &[],
-    };
-
-    texture_cache.get(render_device, descriptor)
+    texture_cache.get(
+        render_device,
+        TextureDescriptor {
+            label: Some(label),
+            size: view_target.main_texture().size(),
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Rgba16Float,
+            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        },
+    )
 }
 
 #[derive(Component)]
 pub struct Lighting2dAuxiliaryTextures {
     pub sdf: CachedTexture,
     pub lighting: CachedTexture,
+    pub blur_x: CachedTexture,
+    pub blur_y: CachedTexture,
 }
 
 pub fn prepare_lighting_auxiliary_textures(
@@ -216,6 +250,8 @@ pub fn prepare_lighting_auxiliary_textures(
                 &render_device,
                 "lighting",
             ),
+            blur_x: create_aux_texture(view_target, &mut texture_cache, &render_device, "blur_x"),
+            blur_y: create_aux_texture(view_target, &mut texture_cache, &render_device, "blur_y"),
         });
     }
 }

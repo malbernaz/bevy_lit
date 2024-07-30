@@ -2,7 +2,7 @@
 
 struct LightingSettings {
     coc: f32,
-    viewport: vec2<u32>,
+    fixed_resolution: u32,
 }
 
 struct AmbientLight2d {
