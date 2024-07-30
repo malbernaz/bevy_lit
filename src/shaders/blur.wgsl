@@ -8,26 +8,19 @@
 @group(0) @binding(3) var texture_sampler: sampler;
 
 @fragment
-fn blur_x(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
-    return blur(in.position, vec2(1.0, 0.0));
-}
-
-@fragment
-fn blur_y(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
-    return blur(in.position, vec2(0.0, 1.0));
-}
-
-fn blur(frag_coord: vec4<f32>, frag_offset: vec2<f32>) -> vec4<f32> {
+fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     var coc = settings.coc;
 
     if !bool(settings.fixed_resolution) {
         let screen_size = view.viewport.zw;
         let screen_diagonal = sqrt(pow(screen_size.x + screen_size.y, 2.0));
-
         coc *= screen_diagonal / 2000.0;
     }
 
-    return gaussian_blur(frag_coord, coc, frag_offset);
+    let x = gaussian_blur(in.position, coc, vec2(1.0, 0.0));
+    let y = gaussian_blur(in.position, coc, vec2(0.0, 1.0));
+
+    return mix(x, y, 0.5);
 }
 
 // ATTRIBUTION: The code for this function was originally

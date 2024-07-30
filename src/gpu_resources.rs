@@ -107,8 +107,7 @@ pub fn prepare_gpu_resources(
 pub struct Lighting2dSurfaceBindGroups {
     pub sdf: BindGroup,
     pub lighting: BindGroup,
-    pub blur_x: BindGroup,
-    pub blur_y: BindGroup,
+    pub blur: BindGroup,
 }
 
 pub fn prepare_lighting_bind_groups(
@@ -159,23 +158,13 @@ pub fn prepare_lighting_bind_groups(
                     &sampler,
                 )),
             ),
-            blur_x: render_device.create_bind_group(
-                "blur_x_bind_group",
+            blur: render_device.create_bind_group(
+                "blur_bind_group",
                 &prepass_pipelines.blur_layout,
                 &BindGroupEntries::sequential((
                     view_uniform.clone(),
                     lighting_settings.clone(),
                     &aux_textures.lighting.default_view,
-                    &sampler,
-                )),
-            ),
-            blur_y: render_device.create_bind_group(
-                "blur_y_bind_group",
-                &prepass_pipelines.blur_layout,
-                &BindGroupEntries::sequential((
-                    view_uniform.clone(),
-                    lighting_settings.clone(),
-                    &aux_textures.blur_x.default_view,
                     &sampler,
                 )),
             ),
@@ -231,8 +220,7 @@ fn create_aux_texture(
 pub struct Lighting2dAuxiliaryTextures {
     pub sdf: CachedTexture,
     pub lighting: CachedTexture,
-    pub blur_x: CachedTexture,
-    pub blur_y: CachedTexture,
+    pub blur: CachedTexture,
 }
 
 pub fn prepare_lighting_auxiliary_textures(
@@ -250,8 +238,7 @@ pub fn prepare_lighting_auxiliary_textures(
                 &render_device,
                 "lighting",
             ),
-            blur_x: create_aux_texture(view_target, &mut texture_cache, &render_device, "blur_x"),
-            blur_y: create_aux_texture(view_target, &mut texture_cache, &render_device, "blur_y"),
+            blur: create_aux_texture(view_target, &mut texture_cache, &render_device, "blur"),
         });
     }
 }
