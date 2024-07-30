@@ -76,8 +76,7 @@ pub struct Lighting2dPrepassPipelines {
     pub lighting_layout: BindGroupLayout,
     pub lighting_pipeline: CachedRenderPipelineId,
     pub blur_layout: BindGroupLayout,
-    pub blur_x_pipeline: CachedRenderPipelineId,
-    pub blur_y_pipeline: CachedRenderPipelineId,
+    pub blur_pipeline: CachedRenderPipelineId,
 }
 
 impl FromWorld for Lighting2dPrepassPipelines {
@@ -139,20 +138,12 @@ impl FromWorld for Lighting2dPrepassPipelines {
             ),
         );
 
-        let blur_x_pipeline = create_pipeline_descriptor(
+        let blur_pipeline = create_pipeline_descriptor(
             pipeline_cache,
-            "blur_x_pipeline",
+            "blur_pipeline",
             &blur_layout,
             BLUR_SHADER,
-            Some("blur_x"),
-        );
-
-        let blur_y_pipeline = create_pipeline_descriptor(
-            pipeline_cache,
-            "blur_y_pipeline",
-            &blur_layout,
-            BLUR_SHADER,
-            Some("blur_y"),
+            None,
         );
 
         Self {
@@ -161,8 +152,7 @@ impl FromWorld for Lighting2dPrepassPipelines {
             lighting_layout,
             lighting_pipeline,
             blur_layout,
-            blur_x_pipeline,
-            blur_y_pipeline,
+            blur_pipeline,
         }
     }
 }
@@ -258,14 +248,12 @@ impl ViewNode for LightingNode {
         let (
             Some(sdf_pipeline),
             Some(lighting_pipeline),
-            Some(blur_x_pipeline),
-            Some(blur_y_pipeline),
+            Some(blur_pipeline),
             Some(post_process_pipeline),
         ) = (
             pipeline_cache.get_render_pipeline(prepass_pipelines.sdf_pipeline),
             pipeline_cache.get_render_pipeline(prepass_pipelines.lighting_pipeline),
-            pipeline_cache.get_render_pipeline(prepass_pipelines.blur_x_pipeline),
-            pipeline_cache.get_render_pipeline(prepass_pipelines.blur_y_pipeline),
+            pipeline_cache.get_render_pipeline(prepass_pipelines.blur_pipeline),
             pipeline_cache.get_render_pipeline(post_process_pipeline_id.0),
         )
         else {
@@ -310,11 +298,10 @@ impl ViewNode for LightingNode {
         let should_blur = world.resource::<ExtractedLighting2dSettings>().blur_coc > 0.0;
 
         if should_blur {
-            // Blur x
-            let mut blur_x_pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
-                label: Some("blur_x_pass"),
+            let mut blur_pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
+                label: Some("blur_pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &aux_textures.blur_x.default_view,
+                    view: &aux_textures.blur.default_view,
                     resolve_target: None,
                     ops: Operations {
                         load: LoadOp::Load,
@@ -324,31 +311,9 @@ impl ViewNode for LightingNode {
                 ..default()
             });
 
-            blur_x_pass.set_bind_group(0, &bind_groups.blur_x, &[view_uniform.offset]);
-            blur_x_pass.set_render_pipeline(blur_x_pipeline);
-            blur_x_pass.draw(0..3, 0..1);
-
-            drop(blur_x_pass);
-
-            // Blur y
-            let mut blur_y_pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
-                label: Some("blur_y_pass"),
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &aux_textures.blur_y.default_view,
-                    resolve_target: None,
-                    ops: Operations {
-                        load: LoadOp::Load,
-                        store: StoreOp::Store,
-                    },
-                })],
-                ..default()
-            });
-
-            blur_y_pass.set_bind_group(0, &bind_groups.blur_y, &[view_uniform.offset]);
-            blur_y_pass.set_render_pipeline(blur_y_pipeline);
-            blur_y_pass.draw(0..3, 0..1);
-
-            drop(blur_y_pass);
+            blur_pass.set_bind_group(0, &bind_groups.blur, &[view_uniform.offset]);
+            blur_pass.set_render_pipeline(blur_pipeline);
+            blur_pass.draw(0..3, 0..1);
         }
 
         // Post Process
@@ -364,7 +329,7 @@ impl ViewNode for LightingNode {
             &BindGroupEntries::sequential((
                 post_process.source,
                 if should_blur {
-                    &aux_textures.blur_y.default_view
+                    &aux_textures.blur.default_view
                 } else {
                     &aux_textures.lighting.default_view
                 },
