@@ -3,6 +3,7 @@ use bevy::{
     core_pipeline::core_2d::graph::{Core2d, Node2d},
     prelude::*,
     render::{
+        extract_component::UniformComponentPlugin,
         render_graph::{RenderGraphApp, ViewNodeRunner},
         render_resource::SpecializedRenderPipelines,
         view::{check_visibility, prepare_view_targets, VisibilitySystems},
@@ -11,7 +12,10 @@ use bevy::{
 };
 
 use crate::{
-    extract::{extract_light_occluders, extract_lighting_resources, extract_point_lights},
+    extract::{
+        extract_light_occluders, extract_lighting_resources, extract_point_lights,
+        ExtractedAmbientLight2d, ExtractedLighting2dSettings,
+    },
     gpu_resources::{
         prepare_gpu_resources, prepare_lighting_auxiliary_textures, prepare_lighting_bind_groups,
         prepare_post_process_pipelines,
@@ -58,20 +62,24 @@ impl Plugin for Lighting2dPlugin {
             Shader::from_wgsl
         );
 
-        app.register_type::<AmbientLight2d>()
-            .register_type::<PointLight2d>()
-            .register_type::<LightOccluder2d>()
-            .register_type::<Lighting2dSettings>()
-            .insert_resource(self.ambient_light.clone())
-            .insert_resource(Lighting2dSettings {
-                shadow_softness: self.shadow_softness,
-                fixed_resolution: self.fixed_resolution,
-            })
-            .add_systems(
-                PostUpdate,
-                check_visibility::<Or<(With<PointLight2d>, With<LightOccluder2d>)>>
-                    .in_set(VisibilitySystems::CheckVisibility),
-            );
+        app.add_plugins((
+            UniformComponentPlugin::<ExtractedAmbientLight2d>::default(),
+            UniformComponentPlugin::<ExtractedLighting2dSettings>::default(),
+        ))
+        .register_type::<AmbientLight2d>()
+        .register_type::<PointLight2d>()
+        .register_type::<LightOccluder2d>()
+        .register_type::<Lighting2dSettings>()
+        .insert_resource(self.ambient_light.clone())
+        .insert_resource(Lighting2dSettings {
+            shadow_softness: self.shadow_softness,
+            fixed_resolution: self.fixed_resolution,
+        })
+        .add_systems(
+            PostUpdate,
+            check_visibility::<Or<(With<PointLight2d>, With<LightOccluder2d>)>>
+                .in_set(VisibilitySystems::CheckVisibility),
+        );
 
         let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
             return;

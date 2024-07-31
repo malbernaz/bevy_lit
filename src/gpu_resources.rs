@@ -1,13 +1,11 @@
 use bevy::{
     prelude::*,
     render::{
+        extract_component::ComponentUniforms,
         render_resource::{
-            binding_types::{storage_buffer_read_only, uniform_buffer},
-            encase::internal::WriteInto,
-            BindGroup, BindGroupEntries, BindGroupLayoutEntryBuilder, BindingResource,
-            CachedRenderPipelineId, GpuArrayBufferable, PipelineCache, SamplerDescriptor,
-            ShaderType, SpecializedRenderPipelines, StorageBuffer, TextureDescriptor,
-            TextureDimension, TextureFormat, TextureUsages, UniformBuffer,
+            BindGroup, BindGroupEntries, CachedRenderPipelineId, GpuArrayBuffer, PipelineCache,
+            SamplerDescriptor, SpecializedRenderPipelines, TextureDescriptor, TextureDimension,
+            TextureFormat, TextureUsages,
         },
         renderer::{RenderDevice, RenderQueue},
         texture::{CachedTexture, TextureCache},
@@ -23,82 +21,26 @@ use crate::{
     pipeline::{Lighting2dPipelineKey, Lighting2dPrepassPipelines, PostProcessPipeline},
 };
 
-#[derive(Resource)]
-pub struct LightingUniform<T: ShaderType> {
-    value: UniformBuffer<T>,
-}
-
-impl<T: ShaderType + WriteInto> LightingUniform<T> {
-    pub fn new(value: T) -> Self {
-        Self {
-            value: UniformBuffer::from(value),
-        }
-    }
-
-    pub fn write_buffer(&mut self, render_device: &RenderDevice, render_queue: &RenderQueue) {
-        self.value.write_buffer(render_device, render_queue);
-    }
-
-    pub fn binding(&self) -> Option<BindingResource> {
-        self.value.binding()
-    }
-
-    pub fn binding_layout() -> BindGroupLayoutEntryBuilder {
-        uniform_buffer::<T>(false)
-    }
-}
-
-#[derive(Resource)]
-pub struct LightingArrayBuffer<T: GpuArrayBufferable> {
-    value: StorageBuffer<Vec<T>>,
-}
-
-impl<T: GpuArrayBufferable> LightingArrayBuffer<T> {
-    pub fn new(value: Vec<T>) -> Self {
-        Self {
-            value: StorageBuffer::from(value),
-        }
-    }
-
-    pub fn write_buffer(&mut self, device: &RenderDevice, queue: &RenderQueue) {
-        self.value.write_buffer(device, queue);
-    }
-
-    pub fn binding(&self) -> Option<BindingResource> {
-        self.value.binding()
-    }
-
-    pub fn binding_layout() -> BindGroupLayoutEntryBuilder {
-        storage_buffer_read_only::<T>(false)
-    }
-}
-
 pub fn prepare_gpu_resources(
     mut commands: Commands,
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
-    ambient_light: Res<ExtractedAmbientLight2d>,
-    lighting_settings: Res<ExtractedLighting2dSettings>,
     point_lights_query: Query<&ExtractedPointLight2d>,
     light_occluders_query: Query<&ExtractedLightOccluder2d>,
 ) {
-    let mut gpu_ambient_light = LightingUniform::new(ambient_light.clone());
-    gpu_ambient_light.write_buffer(&render_device, &render_queue);
-    commands.insert_resource(gpu_ambient_light);
-
-    let mut gpu_lighting_settings = LightingUniform::new(lighting_settings.clone());
-    gpu_lighting_settings.write_buffer(&render_device, &render_queue);
-    commands.insert_resource(gpu_lighting_settings);
-
-    let mut gpu_point_lights = LightingArrayBuffer::<ExtractedPointLight2d>::new(
-        point_lights_query.iter().cloned().collect::<Vec<_>>(),
-    );
+    // point_lights
+    let mut gpu_point_lights = GpuArrayBuffer::<ExtractedPointLight2d>::new(&render_device);
+    for l in &point_lights_query {
+        gpu_point_lights.push(l.clone());
+    }
     gpu_point_lights.write_buffer(&render_device, &render_queue);
     commands.insert_resource(gpu_point_lights);
 
-    let mut gpu_light_occluders = LightingArrayBuffer::<ExtractedLightOccluder2d>::new(
-        light_occluders_query.iter().cloned().collect::<Vec<_>>(),
-    );
+    // light_occluders
+    let mut gpu_light_occluders = GpuArrayBuffer::<ExtractedLightOccluder2d>::new(&render_device);
+    for o in &light_occluders_query {
+        gpu_light_occluders.push(o.clone());
+    }
     gpu_light_occluders.write_buffer(&render_device, &render_queue);
     commands.insert_resource(gpu_light_occluders);
 }
@@ -115,10 +57,10 @@ pub fn prepare_lighting_bind_groups(
     prepass_pipelines: Res<Lighting2dPrepassPipelines>,
     render_device: Res<RenderDevice>,
     view_uniforms: Res<ViewUniforms>,
-    ambient_light: Res<LightingUniform<ExtractedAmbientLight2d>>,
-    light_settings: Res<LightingUniform<ExtractedLighting2dSettings>>,
-    point_lights: Res<LightingArrayBuffer<ExtractedPointLight2d>>,
-    light_occluders: Res<LightingArrayBuffer<ExtractedLightOccluder2d>>,
+    ambient_light: Res<ComponentUniforms<ExtractedAmbientLight2d>>,
+    light_settings: Res<ComponentUniforms<ExtractedLighting2dSettings>>,
+    point_lights: Res<GpuArrayBuffer<ExtractedPointLight2d>>,
+    light_occluders: Res<GpuArrayBuffer<ExtractedLightOccluder2d>>,
     views_query: Query<(Entity, &Lighting2dAuxiliaryTextures)>,
 ) {
     let (

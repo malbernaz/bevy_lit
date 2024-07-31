@@ -8,7 +8,15 @@
 }
 
 @group(0) @binding(1) var<uniform> ambient_light: AmbientLight2d;
-@group(0) @binding(2) var<storage> lights: array<PointLight2d>;
+
+#if AVAILABLE_STORAGE_BUFFER_BINDINGS >= 6
+    @group(0) @binding(2) var<storage> lights: array<PointLight2d>;
+#else
+    const MAX_LIGHTS: u32 = 82u;
+
+    @group(0) @binding(2) var<uniform> lights: array<PointLight2d, MAX_LIGHTS>;
+#endif
+
 @group(0) @binding(3) var sdf: texture_2d<f32>;
 @group(0) @binding(4) var sdf_sampler: sampler;
 
@@ -22,7 +30,13 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         return lighting_color;
     }
 
-    for (var i = 0u; i < arrayLength(&lights); i++) {
+#if AVAILABLE_STORAGE_BUFFER_BINDINGS >= 6
+    let light_count = arrayLength(&lights);
+#else
+    let light_count = MAX_LIGHTS;
+#endif
+
+    for (var i = 0u; i < light_count; i++) {
         let light = lights[i];
         let dist = distance(light.center, pos);
 
@@ -53,7 +67,7 @@ fn attenuation(light: PointLight2d, dist: f32) -> f32 {
 
 fn get_distance(pos: vec2<f32>) -> f32 {
     let uv = ndc_to_uv(position_world_to_ndc(vec3(pos, 0.0)).xy);
-    let dist = textureSample(sdf, sdf_sampler, uv).r;
+    let dist = textureSampleLevel(sdf, sdf_sampler, uv, 0.0).r;
     return dist;
 }
 

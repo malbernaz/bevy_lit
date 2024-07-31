@@ -1,9 +1,9 @@
 #import bevy_render::view::View
 #import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
-#import bevy_lit::types::LightingSettings
+#import bevy_lit::types::Lighting2dSettings
 
 @group(0) @binding(0) var<uniform> view: View;
-@group(0) @binding(1) var<uniform> settings: LightingSettings;
+@group(0) @binding(1) var<uniform> settings: Lighting2dSettings;
 @group(0) @binding(2) var texture: texture_2d<f32>;
 @group(0) @binding(3) var texture_sampler: sampler;
 

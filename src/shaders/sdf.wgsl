@@ -5,7 +5,13 @@
     position_ndc_to_world
 }
 
-@group(0) @binding(1) var<storage> occluders: array<LightOccluder2d>;
+#if AVAILABLE_STORAGE_BUFFER_BINDINGS >= 6
+    @group(0) @binding(1) var<storage> occluders: array<LightOccluder2d>;
+#else
+    const MAX_OCCLUDERS: u32 = 82u;
+
+    @group(0) @binding(1) var<uniform> occluders: array<LightOccluder2d, MAX_OCCLUDERS>;
+#endif
 
 @fragment
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
@@ -13,7 +19,13 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 
     var sdf = occluder_sd(pos, occluders[0]);
 
-    for (var i = 1u; i < arrayLength(&occluders); i++) {
+#if AVAILABLE_STORAGE_BUFFER_BINDINGS >= 6
+    let occluder_count = arrayLength(&occluders);
+#else
+    let occluder_count = MAX_OCCLUDERS;
+#endif
+
+    for (var i = 1u; i < occluder_count; i++) {
         sdf = min(sdf, occluder_sd(pos, occluders[i]));
     }
 

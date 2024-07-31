@@ -3,14 +3,15 @@ use bevy::{
     ecs::{query::QueryItem, system::lifetimeless::Read},
     prelude::*,
     render::{
+        extract_component::DynamicUniformIndex,
         render_graph::{NodeRunError, RenderGraphContext, RenderLabel, ViewNode},
         render_resource::{
             binding_types::{sampler, texture_2d, uniform_buffer},
             BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries, CachedRenderPipelineId,
-            ColorTargetState, ColorWrites, FragmentState, LoadOp, MultisampleState, Operations,
-            PipelineCache, PrimitiveState, RenderPassColorAttachment, RenderPassDescriptor,
-            RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor, ShaderStages,
-            SpecializedRenderPipeline, StoreOp, TextureFormat, TextureSampleType,
+            ColorTargetState, ColorWrites, FragmentState, GpuArrayBuffer, LoadOp, MultisampleState,
+            Operations, PipelineCache, PrimitiveState, RenderPassColorAttachment,
+            RenderPassDescriptor, RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor,
+            ShaderStages, SpecializedRenderPipeline, StoreOp, TextureFormat, TextureSampleType,
         },
         renderer::{RenderContext, RenderDevice},
         texture::BevyDefault,
@@ -25,7 +26,6 @@ use crate::{
     },
     gpu_resources::{
         Lighting2dAuxiliaryTextures, Lighting2dPostProcessPipelineId, Lighting2dSurfaceBindGroups,
-        LightingArrayBuffer, LightingUniform,
     },
 };
 
@@ -90,7 +90,7 @@ impl FromWorld for Lighting2dPrepassPipelines {
                 ShaderStages::FRAGMENT,
                 (
                     uniform_buffer::<ViewUniform>(true),
-                    LightingArrayBuffer::<ExtractedLightOccluder2d>::binding_layout(),
+                    GpuArrayBuffer::<ExtractedLightOccluder2d>::binding_layout(render_device),
                 ),
             ),
         );
@@ -109,8 +109,8 @@ impl FromWorld for Lighting2dPrepassPipelines {
                 ShaderStages::FRAGMENT,
                 (
                     uniform_buffer::<ViewUniform>(true),
-                    LightingUniform::<ExtractedAmbientLight2d>::binding_layout(),
-                    LightingArrayBuffer::<ExtractedPointLight2d>::binding_layout(),
+                    uniform_buffer::<ExtractedAmbientLight2d>(true),
+                    GpuArrayBuffer::<ExtractedPointLight2d>::binding_layout(render_device),
                     texture_2d(TextureSampleType::Float { filterable: true }),
                     sampler(SamplerBindingType::Filtering),
                 ),
@@ -131,7 +131,7 @@ impl FromWorld for Lighting2dPrepassPipelines {
                 ShaderStages::FRAGMENT,
                 (
                     uniform_buffer::<ViewUniform>(true),
-                    LightingUniform::<ExtractedLighting2dSettings>::binding_layout(),
+                    uniform_buffer::<ExtractedLighting2dSettings>(true),
                     texture_2d(TextureSampleType::Float { filterable: true }),
                     sampler(SamplerBindingType::Filtering),
                 ),
@@ -230,16 +230,25 @@ impl ViewNode for LightingNode {
         Read<Lighting2dPostProcessPipelineId>,
         Read<Lighting2dAuxiliaryTextures>,
         Read<Lighting2dSurfaceBindGroups>,
+        Read<DynamicUniformIndex<ExtractedAmbientLight2d>>,
+        Read<DynamicUniformIndex<ExtractedLighting2dSettings>>,
+        Read<ExtractedLighting2dSettings>,
     );
 
     fn run<'w>(
         &self,
         _: &mut RenderGraphContext,
         ctx: &mut RenderContext<'w>,
-        (view_target, view_uniform, post_process_pipeline_id, aux_textures, bind_groups): QueryItem<
-            'w,
-            Self::ViewQuery,
-        >,
+        (
+            view_target,
+            view_uniform,
+            post_process_pipeline_id,
+            aux_textures,
+            bind_groups,
+            ambient_index,
+            settings_index,
+            settings,
+        ): QueryItem<'w, Self::ViewQuery>,
         world: &'w World,
     ) -> Result<(), NodeRunError> {
         let pipeline_cache = world.resource::<PipelineCache>();
@@ -289,15 +298,17 @@ impl ViewNode for LightingNode {
         });
 
         lighting_pass.set_render_pipeline(lighting_pipeline);
-        lighting_pass.set_bind_group(0, &bind_groups.lighting, &[view_uniform.offset]);
+        lighting_pass.set_bind_group(
+            0,
+            &bind_groups.lighting,
+            &[view_uniform.offset, ambient_index.index()],
+        );
         lighting_pass.draw(0..3, 0..1);
 
         drop(lighting_pass);
 
         // Blur
-        let should_blur = world.resource::<ExtractedLighting2dSettings>().blur_coc > 0.0;
-
-        if should_blur {
+        if settings.blur_coc > 0.0 {
             let mut blur_pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
                 label: Some("blur_pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {
@@ -311,7 +322,11 @@ impl ViewNode for LightingNode {
                 ..default()
             });
 
-            blur_pass.set_bind_group(0, &bind_groups.blur, &[view_uniform.offset]);
+            blur_pass.set_bind_group(
+                0,
+                &bind_groups.blur,
+                &[view_uniform.offset, settings_index.index()],
+            );
             blur_pass.set_render_pipeline(blur_pipeline);
             blur_pass.draw(0..3, 0..1);
         }
@@ -328,7 +343,7 @@ impl ViewNode for LightingNode {
             &world.resource::<PostProcessPipeline>().layout,
             &BindGroupEntries::sequential((
                 post_process.source,
-                if should_blur {
+                if settings.blur_coc > 0.0 {
                     &aux_textures.blur.default_view
                 } else {
                     &aux_textures.lighting.default_view

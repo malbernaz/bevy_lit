@@ -37,7 +37,13 @@ opt-level = 3
 type_complexity = "allow"
 too_many_arguments = "allow"
 
+[lints.rust]
+unexpected_cfgs = "allow"
 
 [[example]]
 name = "basic"
 path = "examples/basic.rs"
+
+[[example]]
+name = "point_light"
+path = "examples/point_light.rs"

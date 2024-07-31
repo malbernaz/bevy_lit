@@ -5,36 +5,54 @@ use bevy::{
 
 use crate::{components::LightOccluder2d, prelude::*, resources::Lighting2dSettings};
 
-#[derive(Resource, Clone, ShaderType)]
+#[derive(Component, Clone, ShaderType)]
 pub struct ExtractedAmbientLight2d {
     pub color: LinearRgba,
 }
 
-#[derive(Resource, Clone, ShaderType)]
+#[derive(Component, Clone, ShaderType)]
 pub struct ExtractedLighting2dSettings {
     pub blur_coc: f32,
     pub fixed_resolution: u32,
+    #[cfg(all(feature = "webgl2", target_arch = "wasm32", not(feature = "webgpu")))]
+    _webgl2_padding_0: u32,
+    #[cfg(all(feature = "webgl2", target_arch = "wasm32", not(feature = "webgpu")))]
+    _webgl2_padding_1: u32,
 }
 
 pub fn extract_lighting_resources(
     mut commands: Commands,
     ambient_light: Extract<Res<AmbientLight2d>>,
     lighting_settings: Extract<Res<Lighting2dSettings>>,
+    views_query: Extract<Query<Entity, With<Camera2d>>>,
 ) {
-    commands.insert_resource(ExtractedAmbientLight2d {
-        color: ambient_light.color.to_linear() * ambient_light.brightness,
-    });
-    commands.insert_resource(ExtractedLighting2dSettings {
-        blur_coc: lighting_settings.shadow_softness,
-        fixed_resolution: if lighting_settings.fixed_resolution {
-            1
-        } else {
-            0
+    let bundle = (
+        ExtractedAmbientLight2d {
+            color: ambient_light.color.to_linear() * ambient_light.brightness,
         },
-    });
+        ExtractedLighting2dSettings {
+            blur_coc: lighting_settings.shadow_softness,
+            fixed_resolution: if lighting_settings.fixed_resolution {
+                1
+            } else {
+                0
+            },
+            #[cfg(all(feature = "webgl2", target_arch = "wasm32", not(feature = "webgpu")))]
+            _webgl2_padding_0: Default::default(),
+            #[cfg(all(feature = "webgl2", target_arch = "wasm32", not(feature = "webgpu")))]
+            _webgl2_padding_1: Default::default(),
+        },
+    );
+
+    let values = views_query
+        .iter()
+        .map(|e| (e, bundle.clone()))
+        .collect::<Vec<_>>();
+
+    commands.insert_or_spawn_batch(values);
 }
 
-#[derive(Debug, Component, Default, Clone, ShaderType)]
+#[derive(Component, Default, Clone, ShaderType)]
 pub struct ExtractedLightOccluder2d {
     pub center: Vec2,
     pub half_size: Vec2,
@@ -67,7 +85,7 @@ pub fn extract_light_occluders(
     commands.insert_or_spawn_batch(values);
 }
 
-#[derive(Component, Debug, Clone, ShaderType)]
+#[derive(Component, Default, Clone, ShaderType)]
 pub struct ExtractedPointLight2d {
     pub center: Vec2,
     pub color: LinearRgba,
