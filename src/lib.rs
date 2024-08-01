@@ -1,8 +1,8 @@
 mod components;
 mod extract;
-mod gpu_resources;
 mod pipeline;
 mod plugin;
+mod prepare;
 mod resources;
 
 pub mod prelude {

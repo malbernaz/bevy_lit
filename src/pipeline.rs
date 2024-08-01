@@ -20,16 +20,14 @@ use bevy::{
 };
 
 use crate::{
-    extract::{
-        ExtractedAmbientLight2d, ExtractedLightOccluder2d, ExtractedLighting2dSettings,
-        ExtractedPointLight2d,
-    },
-    gpu_resources::{
+    extract::{ExtractedLightOccluder2d, ExtractedLighting2dSettings, ExtractedPointLight2d},
+    prepare::{
         Lighting2dAuxiliaryTextures, Lighting2dPostProcessPipelineId, Lighting2dSurfaceBindGroups,
     },
 };
 
 pub const TYPES_SHADER: Handle<Shader> = Handle::weak_from_u128(76578417911493);
+pub const VIEW_TRANSFORMATIONS_SHADER: Handle<Shader> = Handle::weak_from_u128(43290875047924);
 pub const SDF_SHADER: Handle<Shader> = Handle::weak_from_u128(57492774892945);
 pub const LIGHTING_SHADER: Handle<Shader> = Handle::weak_from_u128(47320975447604);
 pub const BLUR_SHADER: Handle<Shader> = Handle::weak_from_u128(43806754295913);
@@ -109,7 +107,7 @@ impl FromWorld for Lighting2dPrepassPipelines {
                 ShaderStages::FRAGMENT,
                 (
                     uniform_buffer::<ViewUniform>(true),
-                    uniform_buffer::<ExtractedAmbientLight2d>(true),
+                    uniform_buffer::<ExtractedLighting2dSettings>(true),
                     GpuArrayBuffer::<ExtractedPointLight2d>::binding_layout(render_device),
                     texture_2d(TextureSampleType::Float { filterable: true }),
                     sampler(SamplerBindingType::Filtering),
@@ -230,9 +228,8 @@ impl ViewNode for LightingNode {
         Read<Lighting2dPostProcessPipelineId>,
         Read<Lighting2dAuxiliaryTextures>,
         Read<Lighting2dSurfaceBindGroups>,
-        Read<DynamicUniformIndex<ExtractedAmbientLight2d>>,
-        Read<DynamicUniformIndex<ExtractedLighting2dSettings>>,
         Read<ExtractedLighting2dSettings>,
+        Read<DynamicUniformIndex<ExtractedLighting2dSettings>>,
     );
 
     fn run<'w>(
@@ -245,9 +242,8 @@ impl ViewNode for LightingNode {
             post_process_pipeline_id,
             aux_textures,
             bind_groups,
-            ambient_index,
-            settings_index,
             settings,
+            settings_index,
         ): QueryItem<'w, Self::ViewQuery>,
         world: &'w World,
     ) -> Result<(), NodeRunError> {
@@ -269,6 +265,12 @@ impl ViewNode for LightingNode {
             return Ok(());
         };
 
+        let storage_buffer_support = ctx
+            .render_device()
+            .limits()
+            .max_storage_buffers_per_shader_stage
+            > 0;
+
         // SDF
         let mut sdf_pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
             label: Some("sdf_pass"),
@@ -280,8 +282,13 @@ impl ViewNode for LightingNode {
             ..default()
         });
 
+        let mut dynamic_offset = vec![view_uniform.offset];
+        if !storage_buffer_support {
+            dynamic_offset.push(0);
+        }
+
         sdf_pass.set_render_pipeline(sdf_pipeline);
-        sdf_pass.set_bind_group(0, &bind_groups.sdf, &[view_uniform.offset]);
+        sdf_pass.set_bind_group(0, &bind_groups.sdf, &dynamic_offset[..]);
         sdf_pass.draw(0..3, 0..1);
 
         drop(sdf_pass);
@@ -297,12 +304,13 @@ impl ViewNode for LightingNode {
             ..default()
         });
 
+        let mut dynamic_offset = vec![view_uniform.offset, settings_index.index()];
+        if !storage_buffer_support {
+            dynamic_offset.push(0);
+        }
+
         lighting_pass.set_render_pipeline(lighting_pipeline);
-        lighting_pass.set_bind_group(
-            0,
-            &bind_groups.lighting,
-            &[view_uniform.offset, ambient_index.index()],
-        );
+        lighting_pass.set_bind_group(0, &bind_groups.lighting, &dynamic_offset[..]);
         lighting_pass.draw(0..3, 0..1);
 
         drop(lighting_pass);

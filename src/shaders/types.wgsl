@@ -3,15 +3,7 @@
 struct Lighting2dSettings {
     coc: f32,
     fixed_resolution: u32,
-#ifdef SIXTEEN_BYTE_ALIGNMENT
-    // WebGL2 structs must be 16 byte aligned.
-    _webgl2_padding_0: u32, 
-    _webgl2_padding_1: u32, 
-#endif
-}
-
-struct AmbientLight2d {
-    color: vec4<f32>,
+    ambient_light: vec4<f32>,
 }
 
 struct LightOccluder2d {

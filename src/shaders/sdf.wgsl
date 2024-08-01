@@ -1,8 +1,7 @@
 #import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
-#import bevy_lit::types::LightOccluder2d
-#import bevy_pbr::view_transformations::{
-    frag_coord_to_ndc,
-    position_ndc_to_world
+#import bevy_lit::{
+    types::LightOccluder2d,
+    view_transformations::{frag_coord_to_ndc, position_ndc_to_world},
 }
 
 #if AVAILABLE_STORAGE_BUFFER_BINDINGS >= 6

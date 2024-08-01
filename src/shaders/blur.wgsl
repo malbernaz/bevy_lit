@@ -51,4 +51,3 @@ fn gaussian_blur(frag_coord: vec4<f32>, coc: f32, frag_offset: vec2<f32>) -> vec
 
     return vec4(sum / weight_sum, 1.0);
 }
-

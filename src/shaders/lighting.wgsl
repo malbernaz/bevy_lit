@@ -1,13 +1,15 @@
 #import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
-#import bevy_lit::types::{AmbientLight2d, PointLight2d},
-#import bevy_pbr::view_transformations::{
-    frag_coord_to_ndc,
-    position_ndc_to_world,
-    position_world_to_ndc,
-    ndc_to_uv,
+#import bevy_lit::{
+    types::{Lighting2dSettings, PointLight2d},
+    view_transformations::{
+        frag_coord_to_ndc,
+        position_ndc_to_world,
+        position_world_to_ndc,
+        ndc_to_uv,
+    }
 }
 
-@group(0) @binding(1) var<uniform> ambient_light: AmbientLight2d;
+@group(0) @binding(1) var<uniform> settings: Lighting2dSettings;
 
 #if AVAILABLE_STORAGE_BUFFER_BINDINGS >= 6
     @group(0) @binding(2) var<storage> lights: array<PointLight2d>;
@@ -24,7 +26,7 @@
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let pos = position_ndc_to_world(frag_coord_to_ndc(in.position)).xy;
 
-    var lighting_color = ambient_light.color;
+    var lighting_color = settings.ambient_light;
 
     if get_distance(pos) <= 0.0 {
         return lighting_color;

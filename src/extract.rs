@@ -6,47 +6,34 @@ use bevy::{
 use crate::{components::LightOccluder2d, prelude::*, resources::Lighting2dSettings};
 
 #[derive(Component, Clone, ShaderType)]
-pub struct ExtractedAmbientLight2d {
-    pub color: LinearRgba,
-}
-
-#[derive(Component, Clone, ShaderType)]
 pub struct ExtractedLighting2dSettings {
     pub blur_coc: f32,
     pub fixed_resolution: u32,
-    #[cfg(all(feature = "webgl2", target_arch = "wasm32", not(feature = "webgpu")))]
-    _webgl2_padding_0: u32,
-    #[cfg(all(feature = "webgl2", target_arch = "wasm32", not(feature = "webgpu")))]
-    _webgl2_padding_1: u32,
+    pub ambient_light: LinearRgba,
 }
 
-pub fn extract_lighting_resources(
+pub fn extract_lighting2d_settings(
     mut commands: Commands,
     ambient_light: Extract<Res<AmbientLight2d>>,
     lighting_settings: Extract<Res<Lighting2dSettings>>,
     views_query: Extract<Query<Entity, With<Camera2d>>>,
 ) {
-    let bundle = (
-        ExtractedAmbientLight2d {
-            color: ambient_light.color.to_linear() * ambient_light.brightness,
-        },
-        ExtractedLighting2dSettings {
-            blur_coc: lighting_settings.shadow_softness,
-            fixed_resolution: if lighting_settings.fixed_resolution {
-                1
-            } else {
-                0
-            },
-            #[cfg(all(feature = "webgl2", target_arch = "wasm32", not(feature = "webgpu")))]
-            _webgl2_padding_0: Default::default(),
-            #[cfg(all(feature = "webgl2", target_arch = "wasm32", not(feature = "webgpu")))]
-            _webgl2_padding_1: Default::default(),
-        },
-    );
-
     let values = views_query
         .iter()
-        .map(|e| (e, bundle.clone()))
+        .map(|e| {
+            (
+                e,
+                ExtractedLighting2dSettings {
+                    blur_coc: lighting_settings.shadow_softness,
+                    fixed_resolution: if lighting_settings.fixed_resolution {
+                        1
+                    } else {
+                        0
+                    },
+                    ambient_light: ambient_light.color.to_linear() * ambient_light.brightness,
+                },
+            )
+        })
         .collect::<Vec<_>>();
 
     commands.insert_or_spawn_batch(values);
@@ -65,6 +52,8 @@ pub fn extract_light_occluders(
         Query<(Entity, &LightOccluder2d, &GlobalTransform, &ViewVisibility)>,
     >,
 ) {
+    commands.spawn(ExtractedLightOccluder2d::default());
+
     let mut values = Vec::with_capacity(*previous_len);
 
     for (entity, light_occluder, transform, view_visibility) in &light_occluders_query {
@@ -99,6 +88,8 @@ pub fn extract_point_lights(
     mut previous_len: Local<usize>,
     point_lights_query: Extract<Query<(Entity, &PointLight2d, &GlobalTransform, &ViewVisibility)>>,
 ) {
+    commands.spawn(ExtractedPointLight2d::default());
+
     let mut values = Vec::with_capacity(*previous_len);
 
     for (entity, point_light, transform, visibility) in point_lights_query.iter() {

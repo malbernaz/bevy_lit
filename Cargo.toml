@@ -12,7 +12,6 @@ exclude = ["static/*"]
 
 [dependencies]
 bevy = { version = "0.14", default-features = false, features = [
-  "bevy_pbr",
   "bevy_render",
   "bevy_core_pipeline",
   "bevy_winit",
@@ -20,7 +19,6 @@ bevy = { version = "0.14", default-features = false, features = [
 
 [dev-dependencies]
 bevy = { version = "0.14", default-features = false, features = [
-  "bevy_pbr",
   "bevy_render",
   "bevy_core_pipeline",
   "bevy_winit",
@@ -36,9 +34,6 @@ opt-level = 3
 [lints.clippy]
 type_complexity = "allow"
 too_many_arguments = "allow"
-
-[lints.rust]
-unexpected_cfgs = "allow"
 
 [[example]]
 name = "basic"

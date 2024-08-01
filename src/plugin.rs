@@ -4,6 +4,7 @@ use bevy::{
     prelude::*,
     render::{
         extract_component::UniformComponentPlugin,
+        gpu_component_array_buffer::GpuComponentArrayBufferPlugin,
         render_graph::{RenderGraphApp, ViewNodeRunner},
         render_resource::SpecializedRenderPipelines,
         view::{check_visibility, prepare_view_targets, VisibilitySystems},
@@ -13,18 +14,19 @@ use bevy::{
 
 use crate::{
     extract::{
-        extract_light_occluders, extract_lighting_resources, extract_point_lights,
-        ExtractedAmbientLight2d, ExtractedLighting2dSettings,
-    },
-    gpu_resources::{
-        prepare_gpu_resources, prepare_lighting_auxiliary_textures, prepare_lighting_bind_groups,
-        prepare_post_process_pipelines,
+        extract_light_occluders, extract_lighting2d_settings, extract_point_lights,
+        ExtractedLightOccluder2d, ExtractedLighting2dSettings, ExtractedPointLight2d,
     },
     pipeline::{
         Lighting2dPrepassPipelines, LightingLabel, LightingNode, PostProcessPipeline, BLUR_SHADER,
         LIGHTING_SHADER, POST_PROCESS_SHADER, SDF_SHADER, TYPES_SHADER,
+        VIEW_TRANSFORMATIONS_SHADER,
     },
     prelude::{AmbientLight2d, LightOccluder2d, PointLight2d},
+    prepare::{
+        prepare_lighting_auxiliary_textures, prepare_lighting_bind_groups,
+        prepare_post_process_pipelines,
+    },
     resources::Lighting2dSettings,
 };
 
@@ -47,6 +49,12 @@ impl Default for Lighting2dPlugin {
 impl Plugin for Lighting2dPlugin {
     fn build(&self, app: &mut App) {
         load_internal_asset!(app, TYPES_SHADER, "shaders/types.wgsl", Shader::from_wgsl);
+        load_internal_asset!(
+            app,
+            VIEW_TRANSFORMATIONS_SHADER,
+            "shaders/view_transformations.wgsl",
+            Shader::from_wgsl
+        );
         load_internal_asset!(app, SDF_SHADER, "shaders/sdf.wgsl", Shader::from_wgsl);
         load_internal_asset!(
             app,
@@ -63,8 +71,9 @@ impl Plugin for Lighting2dPlugin {
         );
 
         app.add_plugins((
-            UniformComponentPlugin::<ExtractedAmbientLight2d>::default(),
             UniformComponentPlugin::<ExtractedLighting2dSettings>::default(),
+            GpuComponentArrayBufferPlugin::<ExtractedPointLight2d>::default(),
+            GpuComponentArrayBufferPlugin::<ExtractedLightOccluder2d>::default(),
         ))
         .register_type::<AmbientLight2d>()
         .register_type::<PointLight2d>()
@@ -90,7 +99,7 @@ impl Plugin for Lighting2dPlugin {
             .add_systems(
                 ExtractSchedule,
                 (
-                    extract_lighting_resources,
+                    extract_lighting2d_settings,
                     extract_light_occluders,
                     extract_point_lights,
                 ),
@@ -98,11 +107,10 @@ impl Plugin for Lighting2dPlugin {
             .add_systems(
                 Render,
                 (
-                    prepare_post_process_pipelines.in_set(RenderSet::Prepare),
                     prepare_lighting_auxiliary_textures
                         .after(prepare_view_targets)
                         .in_set(RenderSet::ManageViews),
-                    prepare_gpu_resources.in_set(RenderSet::PrepareResources),
+                    prepare_post_process_pipelines.in_set(RenderSet::Prepare),
                     prepare_lighting_bind_groups.in_set(RenderSet::PrepareBindGroups),
                 ),
             )
