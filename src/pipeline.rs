@@ -38,14 +38,7 @@ fn create_pipeline_descriptor(
     label: &'static str,
     layout: &BindGroupLayout,
     shader: Handle<Shader>,
-    entry_point: Option<&'static str>,
 ) -> CachedRenderPipelineId {
-    let entry_point = if let Some(entry_point) = entry_point {
-        entry_point.into()
-    } else {
-        "fragment".into()
-    };
-
     pipeline_cache.queue_render_pipeline(RenderPipelineDescriptor {
         label: Some(label.into()),
         layout: vec![layout.clone()],
@@ -53,7 +46,7 @@ fn create_pipeline_descriptor(
         fragment: Some(FragmentState {
             shader,
             shader_defs: vec![],
-            entry_point,
+            entry_point: "fragment".into(),
             targets: vec![Some(ColorTargetState {
                 format: TextureFormat::Rgba16Float,
                 blend: None,
@@ -93,13 +86,8 @@ impl FromWorld for Lighting2dPrepassPipelines {
             ),
         );
 
-        let sdf_pipeline = create_pipeline_descriptor(
-            pipeline_cache,
-            "sdf_pipeline",
-            &sdf_layout,
-            SDF_SHADER,
-            None,
-        );
+        let sdf_pipeline =
+            create_pipeline_descriptor(pipeline_cache, "sdf_pipeline", &sdf_layout, SDF_SHADER);
 
         let lighting_layout = render_device.create_bind_group_layout(
             "lighting_bind_group_layout",
@@ -120,7 +108,6 @@ impl FromWorld for Lighting2dPrepassPipelines {
             "lighting_pipeline",
             &lighting_layout,
             LIGHTING_SHADER,
-            None,
         );
 
         let blur_layout = render_device.create_bind_group_layout(
@@ -136,13 +123,8 @@ impl FromWorld for Lighting2dPrepassPipelines {
             ),
         );
 
-        let blur_pipeline = create_pipeline_descriptor(
-            pipeline_cache,
-            "blur_pipeline",
-            &blur_layout,
-            BLUR_SHADER,
-            None,
-        );
+        let blur_pipeline =
+            create_pipeline_descriptor(pipeline_cache, "blur_pipeline", &blur_layout, BLUR_SHADER);
 
         Self {
             sdf_layout,
