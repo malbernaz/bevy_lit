@@ -30,20 +30,9 @@ use crate::{
     resources::Lighting2dSettings,
 };
 
+#[derive(Default)]
 pub struct Lighting2dPlugin {
-    pub ambient_light: AmbientLight2d,
-    pub shadow_softness: f32,
-    pub fixed_resolution: bool,
-}
-
-impl Default for Lighting2dPlugin {
-    fn default() -> Self {
-        Self {
-            ambient_light: AmbientLight2d::default(),
-            shadow_softness: 0.0,
-            fixed_resolution: true,
-        }
-    }
+    pub settings: Lighting2dSettings,
 }
 
 impl Plugin for Lighting2dPlugin {
@@ -79,11 +68,7 @@ impl Plugin for Lighting2dPlugin {
         .register_type::<PointLight2d>()
         .register_type::<LightOccluder2d>()
         .register_type::<Lighting2dSettings>()
-        .insert_resource(self.ambient_light.clone())
-        .insert_resource(Lighting2dSettings {
-            shadow_softness: self.shadow_softness,
-            fixed_resolution: self.fixed_resolution,
-        })
+        .insert_resource(self.settings.clone())
         .add_systems(
             PostUpdate,
             check_visibility::<Or<(With<PointLight2d>, With<LightOccluder2d>)>>

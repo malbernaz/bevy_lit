@@ -6,12 +6,10 @@ fn main() {
         .add_plugins((
             DefaultPlugins,
             Lighting2dPlugin {
-                ambient_light: AmbientLight2d {
-                    brightness: 0.2,
-                    color: Color::Srgba(Srgba::hex("#C09AFE").unwrap()),
+                settings: Lighting2dSettings {
+                    shadow_softness: 32.0,
+                    ..default()
                 },
-                shadow_softness: 32.0,
-                ..default()
             },
         ))
         .add_systems(Startup, setup)
@@ -27,7 +25,13 @@ struct CursorLight;
 struct MovingLights;
 
 fn setup(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn((
+        Camera2dBundle::default(),
+        AmbientLight2d {
+            brightness: 0.2,
+            color: Color::Srgba(Srgba::hex("#C09AFE").unwrap()),
+        },
+    ));
 
     vec![
         vec3(-150.0, 0.0, 0.0),

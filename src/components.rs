@@ -6,7 +6,22 @@ use bevy::{
     transform::components::{GlobalTransform, Transform},
 };
 
-#[derive(Component, Clone, Copy, Reflect)]
+#[derive(Component, Clone, Reflect)]
+pub struct AmbientLight2d {
+    pub color: Color,
+    pub brightness: f32,
+}
+
+impl Default for AmbientLight2d {
+    fn default() -> Self {
+        Self {
+            color: Color::WHITE,
+            brightness: 0.8,
+        }
+    }
+}
+
+#[derive(Component, Clone, Reflect)]
 pub struct PointLight2d {
     pub color: Color,
     pub intensity: f32,

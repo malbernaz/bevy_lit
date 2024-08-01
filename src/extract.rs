@@ -14,13 +14,13 @@ pub struct ExtractedLighting2dSettings {
 
 pub fn extract_lighting2d_settings(
     mut commands: Commands,
-    ambient_light: Extract<Res<AmbientLight2d>>,
     lighting_settings: Extract<Res<Lighting2dSettings>>,
-    views_query: Extract<Query<Entity, With<Camera2d>>>,
+    ambient_light_query: Extract<Query<(Entity, &AmbientLight2d), With<Camera2d>>>,
+    views_query: Extract<Query<Entity, (With<Camera2d>, Without<AmbientLight2d>)>>,
 ) {
-    let values = views_query
+    let values = ambient_light_query
         .iter()
-        .map(|e| {
+        .map(|(e, ambient_light)| {
             (
                 e,
                 ExtractedLighting2dSettings {
@@ -37,6 +37,18 @@ pub fn extract_lighting2d_settings(
         .collect::<Vec<_>>();
 
     commands.insert_or_spawn_batch(values);
+
+    for entity in &views_query {
+        commands.entity(entity).insert(ExtractedLighting2dSettings {
+            blur_coc: lighting_settings.shadow_softness,
+            fixed_resolution: if lighting_settings.fixed_resolution {
+                1
+            } else {
+                0
+            },
+            ambient_light: Default::default(),
+        });
+    }
 }
 
 #[derive(Component, Default, Clone, ShaderType)]

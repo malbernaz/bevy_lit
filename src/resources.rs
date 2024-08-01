@@ -16,19 +16,3 @@ impl Default for Lighting2dSettings {
         }
     }
 }
-
-#[derive(Resource, Clone, Reflect)]
-#[reflect(Resource)]
-pub struct AmbientLight2d {
-    pub color: Color,
-    pub brightness: f32,
-}
-
-impl Default for AmbientLight2d {
-    fn default() -> Self {
-        Self {
-            color: Color::WHITE,
-            brightness: 0.8,
-        }
-    }
-}
