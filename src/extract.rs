@@ -3,7 +3,7 @@ use bevy::{
     render::{render_resource::ShaderType, view::ViewVisibility, Extract},
 };
 
-use crate::{components::LightOccluder2d, prelude::*, resources::Lighting2dSettings};
+use crate::prelude::*;
 
 #[derive(Component, Clone, ShaderType)]
 pub struct ExtractedLighting2dSettings {
@@ -12,24 +12,30 @@ pub struct ExtractedLighting2dSettings {
     pub ambient_light: LinearRgba,
 }
 
-pub fn extract_lighting2d_settings(
+pub fn extract_lighting_settings(
     mut commands: Commands,
-    lighting_settings: Extract<Res<Lighting2dSettings>>,
-    ambient_light_query: Extract<Query<(Entity, &AmbientLight2d), With<Camera2d>>>,
-    views_query: Extract<Query<Entity, (With<Camera2d>, Without<AmbientLight2d>)>>,
+    ambient_light_query: Extract<
+        Query<(Entity, Option<&AmbientLight2d>, Option<&Lighting2dSettings>), With<Camera2d>>,
+    >,
 ) {
     let values = ambient_light_query
         .iter()
-        .map(|(e, ambient_light)| {
+        .map(|(e, ambient_light, settings)| {
+            let ambient_light = ambient_light.unwrap_or(&AmbientLight2d {
+                color: Color::WHITE,
+                brightness: 1.0,
+            });
+
+            let settings = settings.unwrap_or(&Lighting2dSettings {
+                shadow_softness: 0.0,
+                fixed_resolution: true,
+            });
+
             (
                 e,
                 ExtractedLighting2dSettings {
-                    blur_coc: lighting_settings.shadow_softness,
-                    fixed_resolution: if lighting_settings.fixed_resolution {
-                        1
-                    } else {
-                        0
-                    },
+                    blur_coc: settings.shadow_softness,
+                    fixed_resolution: if settings.fixed_resolution { 1 } else { 0 },
                     ambient_light: ambient_light.color.to_linear() * ambient_light.brightness,
                 },
             )
@@ -37,18 +43,6 @@ pub fn extract_lighting2d_settings(
         .collect::<Vec<_>>();
 
     commands.insert_or_spawn_batch(values);
-
-    for entity in &views_query {
-        commands.entity(entity).insert(ExtractedLighting2dSettings {
-            blur_coc: lighting_settings.shadow_softness,
-            fixed_resolution: if lighting_settings.fixed_resolution {
-                1
-            } else {
-                0
-            },
-            ambient_light: Default::default(),
-        });
-    }
 }
 
 #[derive(Component, Default, Clone, ShaderType)]

@@ -3,7 +3,7 @@ use bevy_lit::prelude::*;
 
 fn main() {
     App::new()
-        .add_plugins((DefaultPlugins, Lighting2dPlugin::default()))
+        .add_plugins((DefaultPlugins, Lighting2dPlugin))
         .add_systems(Startup, setup)
         .run();
 }

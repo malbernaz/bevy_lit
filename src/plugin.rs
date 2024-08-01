@@ -14,7 +14,7 @@ use bevy::{
 
 use crate::{
     extract::{
-        extract_light_occluders, extract_lighting2d_settings, extract_point_lights,
+        extract_light_occluders, extract_lighting_settings, extract_point_lights,
         ExtractedLightOccluder2d, ExtractedLighting2dSettings, ExtractedPointLight2d,
     },
     pipeline::{
@@ -22,18 +22,15 @@ use crate::{
         LIGHTING_SHADER, POST_PROCESS_SHADER, SDF_SHADER, TYPES_SHADER,
         VIEW_TRANSFORMATIONS_SHADER,
     },
-    prelude::{AmbientLight2d, LightOccluder2d, PointLight2d},
+    prelude::{AmbientLight2d, LightOccluder2d, Lighting2dSettings, PointLight2d},
     prepare::{
         prepare_lighting_auxiliary_textures, prepare_lighting_bind_groups,
         prepare_post_process_pipelines,
     },
-    resources::Lighting2dSettings,
 };
 
 #[derive(Default)]
-pub struct Lighting2dPlugin {
-    pub settings: Lighting2dSettings,
-}
+pub struct Lighting2dPlugin;
 
 impl Plugin for Lighting2dPlugin {
     fn build(&self, app: &mut App) {
@@ -68,7 +65,6 @@ impl Plugin for Lighting2dPlugin {
         .register_type::<PointLight2d>()
         .register_type::<LightOccluder2d>()
         .register_type::<Lighting2dSettings>()
-        .insert_resource(self.settings.clone())
         .add_systems(
             PostUpdate,
             check_visibility::<Or<(With<PointLight2d>, With<LightOccluder2d>)>>
@@ -84,7 +80,7 @@ impl Plugin for Lighting2dPlugin {
             .add_systems(
                 ExtractSchedule,
                 (
-                    extract_lighting2d_settings,
+                    extract_lighting_settings,
                     extract_light_occluders,
                     extract_point_lights,
                 ),

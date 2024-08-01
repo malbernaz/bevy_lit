@@ -3,15 +3,7 @@ use bevy_lit::prelude::*;
 
 fn main() {
     App::new()
-        .add_plugins((
-            DefaultPlugins,
-            Lighting2dPlugin {
-                settings: Lighting2dSettings {
-                    shadow_softness: 32.0,
-                    ..default()
-                },
-            },
-        ))
+        .add_plugins((DefaultPlugins, Lighting2dPlugin))
         .add_systems(Startup, setup)
         .add_systems(Update, update_cursor_light)
         .add_systems(FixedUpdate, update_moving_lights)
@@ -30,6 +22,10 @@ fn setup(mut commands: Commands) {
         AmbientLight2d {
             brightness: 0.2,
             color: Color::Srgba(Srgba::hex("#C09AFE").unwrap()),
+        },
+        Lighting2dSettings {
+            shadow_softness: 32.0,
+            ..default()
         },
     ));
 
