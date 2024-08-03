@@ -1,6 +1,6 @@
 [package]
 name = "bevy_lit"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 categories = ["graphics", "game-development", "game-engines", "rendering"]
 description = "A lighting 2d library for Bevy"
@@ -15,6 +15,7 @@ bevy = { version = "0.14", default-features = false, features = [
   "bevy_render",
   "bevy_core_pipeline",
   "bevy_winit",
+  "x11",
 ] }
 
 [dev-dependencies]
@@ -23,6 +24,7 @@ bevy = { version = "0.14", default-features = false, features = [
   "bevy_core_pipeline",
   "bevy_winit",
   "bevy_sprite",
+  "x11",
 ] }
 
 [profile.dev]
@@ -34,7 +36,6 @@ opt-level = 3
 [lints.clippy]
 type_complexity = "allow"
 too_many_arguments = "allow"
-
 
 [[example]]
 name = "basic"

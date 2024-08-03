@@ -1,27 +1,44 @@
-#import bevy_render::view::View
+#import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
 #import bevy_lit::{
-    functions::{screen_to_world, world_to_sdf_uv},
-    types::{AmbientLight2d, PointLight2d},
+    types::{Lighting2dSettings, PointLight2d},
+    view_transformations::{
+        frag_coord_to_ndc,
+        position_ndc_to_world,
+        position_world_to_ndc,
+        ndc_to_uv,
+    }
 }
 
-@group(0) @binding(2) var<uniform> ambient_light: AmbientLight2d;
-@group(0) @binding(3) var<storage> lights: array<PointLight2d>;
-@group(0) @binding(4) var lighting_texture: texture_storage_2d<rgba16float, write>;
-@group(0) @binding(5) var sdf: texture_2d<f32>;
-@group(0) @binding(6) var sdf_sampler: sampler;
+@group(0) @binding(1) var<uniform> settings: Lighting2dSettings;
 
-@compute @workgroup_size(16, 16, 1)
-fn compute(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let pos = screen_to_world(vec2<f32>(global_id.xy));
+#if AVAILABLE_STORAGE_BUFFER_BINDINGS >= 6
+    @group(0) @binding(2) var<storage> lights: array<PointLight2d>;
+#else
+    const MAX_LIGHTS: u32 = 82u;
 
-    var lighting_color = ambient_light.color;
+    @group(0) @binding(2) var<uniform> lights: array<PointLight2d, MAX_LIGHTS>;
+#endif
+
+@group(0) @binding(3) var sdf: texture_2d<f32>;
+@group(0) @binding(4) var sdf_sampler: sampler;
+
+@fragment
+fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
+    let pos = position_ndc_to_world(frag_coord_to_ndc(in.position)).xy;
+
+    var lighting_color = settings.ambient_light;
 
     if get_distance(pos) <= 0.0 {
-        textureStore(lighting_texture, global_id.xy, lighting_color);
-        return;
+        return lighting_color;
     }
 
-    for (var i = 0u; i < arrayLength(&lights); i++) {
+#if AVAILABLE_STORAGE_BUFFER_BINDINGS >= 6
+    let light_count = arrayLength(&lights);
+#else
+    let light_count = MAX_LIGHTS;
+#endif
+
+    for (var i = 0u; i < light_count; i++) {
         let light = lights[i];
         let dist = distance(light.center, pos);
 
@@ -34,7 +51,7 @@ fn compute(@builtin(global_invocation_id) global_id: vec3<u32>) {
         }
     }
 
-    textureStore(lighting_texture, global_id.xy, lighting_color);
+    return lighting_color;
 }
 
 fn square(x: f32) -> f32 {
@@ -51,7 +68,7 @@ fn attenuation(light: PointLight2d, dist: f32) -> f32 {
 }
 
 fn get_distance(pos: vec2<f32>) -> f32 {
-    let uv = world_to_sdf_uv(pos);
+    let uv = ndc_to_uv(position_world_to_ndc(vec3(pos, 0.0)).xy);
     let dist = textureSampleLevel(sdf, sdf_sampler, uv, 0.0).r;
     return dist;
 }

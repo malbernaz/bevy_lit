@@ -3,16 +3,7 @@ use bevy_lit::prelude::*;
 
 fn main() {
     App::new()
-        .add_plugins((
-            DefaultPlugins,
-            Lighting2dPlugin {
-                ambient_light: AmbientLight2d {
-                    brightness: 0.2,
-                    color: Color::Srgba(Srgba::hex("#C09AFE").unwrap()),
-                },
-                shadow_softness: 32.0,
-            },
-        ))
+        .add_plugins((DefaultPlugins, Lighting2dPlugin))
         .add_systems(Startup, setup)
         .add_systems(Update, update_cursor_light)
         .add_systems(FixedUpdate, update_moving_lights)
@@ -26,7 +17,17 @@ struct CursorLight;
 struct MovingLights;
 
 fn setup(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn((
+        Camera2dBundle::default(),
+        AmbientLight2d {
+            brightness: 0.2,
+            color: Color::Srgba(Srgba::hex("#C09AFE").unwrap()),
+        },
+        Lighting2dSettings {
+            shadow_softness: 32.0,
+            ..default()
+        },
+    ));
 
     vec![
         vec3(-150.0, 0.0, 0.0),

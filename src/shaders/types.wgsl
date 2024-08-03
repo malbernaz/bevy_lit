@@ -1,12 +1,9 @@
 #define_import_path bevy_lit::types
 
-struct LightingSettings {
+struct Lighting2dSettings {
     coc: f32,
-    viewport: vec2<u32>,
-}
-
-struct AmbientLight2d {
-    color: vec4<f32>,
+    fixed_resolution: u32,
+    ambient_light: vec4<f32>,
 }
 
 struct LightOccluder2d {

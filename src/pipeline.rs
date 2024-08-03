@@ -3,54 +3,74 @@ use bevy::{
     ecs::{query::QueryItem, system::lifetimeless::Read},
     prelude::*,
     render::{
-        render_asset::RenderAssets,
+        extract_component::DynamicUniformIndex,
         render_graph::{NodeRunError, RenderGraphContext, RenderLabel, ViewNode},
         render_resource::{
-            binding_types::{sampler, texture_2d, texture_storage_2d, uniform_buffer},
-            BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries, CachedComputePipelineId,
-            ColorTargetState, ColorWrites, ComputePassDescriptor, ComputePipelineDescriptor,
-            Extent3d, FragmentState, MultisampleState, Operations, PipelineCache, PrimitiveState,
-            RenderPassColorAttachment, RenderPassDescriptor, RenderPipelineDescriptor,
-            SamplerBindingType, ShaderStages, SpecializedRenderPipeline, StorageTextureAccess,
-            TextureFormat, TextureSampleType,
+            binding_types::{sampler, texture_2d, uniform_buffer},
+            BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries, CachedRenderPipelineId,
+            ColorTargetState, ColorWrites, FragmentState, GpuArrayBuffer, LoadOp, MultisampleState,
+            Operations, PipelineCache, PrimitiveState, RenderPassColorAttachment,
+            RenderPassDescriptor, RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor,
+            ShaderStages, SpecializedRenderPipeline, StoreOp, TextureFormat, TextureSampleType,
         },
         renderer::{RenderContext, RenderDevice},
-        texture::{BevyDefault, GpuImage},
+        texture::BevyDefault,
         view::{ViewTarget, ViewUniform, ViewUniformOffset},
     },
 };
 
 use crate::{
-    extract::{
-        ExtractedAmbientLight2d, ExtractedLightOccluder2d, ExtractedLighting2dSettings,
-        ExtractedPointLight2d,
+    extract::{ExtractedLightOccluder2d, ExtractedLighting2dSettings, ExtractedPointLight2d},
+    prepare::{
+        Lighting2dAuxiliaryTextures, Lighting2dPostProcessPipelineId, Lighting2dSurfaceBindGroups,
     },
-    gpu_bind_groups::{Lighting2dSurfaceBindGroups, PostProcessPipelineId},
-    gpu_resources::{LightingArrayBuffer, LightingUniform},
-    surfaces::{BLUR_SURFACE, SURFACE},
-    utils::workgroup_grid_from_image_size,
 };
 
 pub const TYPES_SHADER: Handle<Shader> = Handle::weak_from_u128(76578417911493);
-pub const FUNCTIONS_SHADER: Handle<Shader> = Handle::weak_from_u128(87346319816813);
+pub const VIEW_TRANSFORMATIONS_SHADER: Handle<Shader> = Handle::weak_from_u128(43290875047924);
 pub const SDF_SHADER: Handle<Shader> = Handle::weak_from_u128(57492774892945);
 pub const LIGHTING_SHADER: Handle<Shader> = Handle::weak_from_u128(47320975447604);
 pub const BLUR_SHADER: Handle<Shader> = Handle::weak_from_u128(43806754295913);
 pub const POST_PROCESS_SHADER: Handle<Shader> = Handle::weak_from_u128(57420546547174);
 
-const WORKGROUP_SIZE: u32 = 16;
-
-#[derive(Debug, Resource)]
-pub struct LightingPipelines {
-    pub sdf_layout: BindGroupLayout,
-    pub sdf_pipeline: CachedComputePipelineId,
-    pub lighting_layout: BindGroupLayout,
-    pub lighting_pipeline: CachedComputePipelineId,
-    pub blur_layout: BindGroupLayout,
-    pub blur_pipeline: CachedComputePipelineId,
+fn create_pipeline_descriptor(
+    pipeline_cache: &PipelineCache,
+    label: &'static str,
+    layout: &BindGroupLayout,
+    shader: Handle<Shader>,
+) -> CachedRenderPipelineId {
+    pipeline_cache.queue_render_pipeline(RenderPipelineDescriptor {
+        label: Some(label.into()),
+        layout: vec![layout.clone()],
+        vertex: fullscreen_shader_vertex_state(),
+        fragment: Some(FragmentState {
+            shader,
+            shader_defs: vec![],
+            entry_point: "fragment".into(),
+            targets: vec![Some(ColorTargetState {
+                format: TextureFormat::Rgba16Float,
+                blend: None,
+                write_mask: ColorWrites::ALL,
+            })],
+        }),
+        primitive: PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: MultisampleState::default(),
+        push_constant_ranges: vec![],
+    })
 }
 
-impl FromWorld for LightingPipelines {
+#[derive(Resource)]
+pub struct Lighting2dPrepassPipelines {
+    pub sdf_layout: BindGroupLayout,
+    pub sdf_pipeline: CachedRenderPipelineId,
+    pub lighting_layout: BindGroupLayout,
+    pub lighting_pipeline: CachedRenderPipelineId,
+    pub blur_layout: BindGroupLayout,
+    pub blur_pipeline: CachedRenderPipelineId,
+}
+
+impl FromWorld for Lighting2dPrepassPipelines {
     fn from_world(world: &mut World) -> Self {
         let render_device = world.resource::<RenderDevice>();
         let pipeline_cache = world.resource::<PipelineCache>();
@@ -58,71 +78,53 @@ impl FromWorld for LightingPipelines {
         let sdf_layout = render_device.create_bind_group_layout(
             "sdf_bind_group_layout",
             &BindGroupLayoutEntries::sequential(
-                ShaderStages::COMPUTE,
+                ShaderStages::FRAGMENT,
                 (
                     uniform_buffer::<ViewUniform>(true),
-                    LightingUniform::<ExtractedLighting2dSettings>::binding_layout(),
-                    LightingArrayBuffer::<ExtractedLightOccluder2d>::binding_layout(),
-                    texture_storage_2d(TextureFormat::Rgba16Float, StorageTextureAccess::WriteOnly),
+                    GpuArrayBuffer::<ExtractedLightOccluder2d>::binding_layout(render_device),
                 ),
             ),
         );
 
-        let sdf_pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
-            label: Some("sdf_pipeline".into()),
-            layout: vec![sdf_layout.clone()],
-            push_constant_ranges: vec![],
-            shader: SDF_SHADER,
-            shader_defs: vec![],
-            entry_point: "compute".into(),
-        });
+        let sdf_pipeline =
+            create_pipeline_descriptor(pipeline_cache, "sdf_pipeline", &sdf_layout, SDF_SHADER);
 
         let lighting_layout = render_device.create_bind_group_layout(
-            "lighting2d_bind_group_layout",
+            "lighting_bind_group_layout",
             &BindGroupLayoutEntries::sequential(
-                ShaderStages::COMPUTE,
+                ShaderStages::FRAGMENT,
                 (
                     uniform_buffer::<ViewUniform>(true),
-                    LightingUniform::<ExtractedLighting2dSettings>::binding_layout(),
-                    LightingUniform::<ExtractedAmbientLight2d>::binding_layout(),
-                    LightingArrayBuffer::<ExtractedPointLight2d>::binding_layout(),
-                    texture_storage_2d(TextureFormat::Rgba16Float, StorageTextureAccess::WriteOnly),
+                    uniform_buffer::<ExtractedLighting2dSettings>(true),
+                    GpuArrayBuffer::<ExtractedPointLight2d>::binding_layout(render_device),
                     texture_2d(TextureSampleType::Float { filterable: true }),
                     sampler(SamplerBindingType::Filtering),
                 ),
             ),
         );
 
-        let lighting_pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
-            label: Some("lighting2d_pipeline".into()),
-            layout: vec![lighting_layout.clone()],
-            push_constant_ranges: vec![],
-            shader: LIGHTING_SHADER,
-            shader_defs: vec![],
-            entry_point: "compute".into(),
-        });
+        let lighting_pipeline = create_pipeline_descriptor(
+            pipeline_cache,
+            "lighting_pipeline",
+            &lighting_layout,
+            LIGHTING_SHADER,
+        );
 
         let blur_layout = render_device.create_bind_group_layout(
             "blur_bind_group_layout",
             &BindGroupLayoutEntries::sequential(
-                ShaderStages::COMPUTE,
+                ShaderStages::FRAGMENT,
                 (
-                    LightingUniform::<ExtractedLighting2dSettings>::binding_layout(),
-                    texture_storage_2d(TextureFormat::Rgba16Float, StorageTextureAccess::WriteOnly),
+                    uniform_buffer::<ViewUniform>(true),
+                    uniform_buffer::<ExtractedLighting2dSettings>(true),
                     texture_2d(TextureSampleType::Float { filterable: true }),
                     sampler(SamplerBindingType::Filtering),
                 ),
             ),
         );
 
-        let blur_pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
-            label: Some("blur_pipeline".into()),
-            layout: vec![blur_layout.clone()],
-            push_constant_ranges: vec![],
-            shader: BLUR_SHADER,
-            shader_defs: vec![],
-            entry_point: "compute".into(),
-        });
+        let blur_pipeline =
+            create_pipeline_descriptor(pipeline_cache, "blur_pipeline", &blur_layout, BLUR_SHADER);
 
         Self {
             sdf_layout,
@@ -160,13 +162,13 @@ impl FromWorld for PostProcessPipeline {
     }
 }
 
-#[derive(Eq, PartialEq, Hash, Clone)]
-pub struct PostProcessKey {
+#[derive(Eq, PartialEq, Hash, Clone, Copy)]
+pub struct Lighting2dPipelineKey {
     pub hdr: bool,
 }
 
 impl SpecializedRenderPipeline for PostProcessPipeline {
-    type Key = PostProcessKey;
+    type Key = Lighting2dPipelineKey;
 
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
         RenderPipelineDescriptor {
@@ -205,114 +207,138 @@ impl ViewNode for LightingNode {
     type ViewQuery = (
         Read<ViewTarget>,
         Read<ViewUniformOffset>,
-        Read<PostProcessPipelineId>,
+        Read<Lighting2dPostProcessPipelineId>,
+        Read<Lighting2dAuxiliaryTextures>,
+        Read<Lighting2dSurfaceBindGroups>,
+        Read<ExtractedLighting2dSettings>,
+        Read<DynamicUniformIndex<ExtractedLighting2dSettings>>,
     );
 
     fn run<'w>(
         &self,
         _: &mut RenderGraphContext,
         ctx: &mut RenderContext<'w>,
-        (view_target, view_uniform, post_process_pipeline_id): QueryItem<'w, Self::ViewQuery>,
+        (
+            view_target,
+            view_uniform,
+            post_process_pipeline_id,
+            aux_textures,
+            bind_groups,
+            settings,
+            settings_index,
+        ): QueryItem<'w, Self::ViewQuery>,
         world: &'w World,
     ) -> Result<(), NodeRunError> {
-        if !world.contains_resource::<Lighting2dSurfaceBindGroups>() {
-            return Ok(());
-        }
-
         let pipeline_cache = world.resource::<PipelineCache>();
-        let lighting_pipeline = world.resource::<LightingPipelines>();
-        let images = world.resource::<RenderAssets<GpuImage>>();
+        let prepass_pipelines = world.resource::<Lighting2dPrepassPipelines>();
 
         let (
             Some(sdf_pipeline),
             Some(lighting_pipeline),
             Some(blur_pipeline),
             Some(post_process_pipeline),
-            Some(surface),
-            Some(blur_surface),
         ) = (
-            pipeline_cache.get_compute_pipeline(lighting_pipeline.sdf_pipeline),
-            pipeline_cache.get_compute_pipeline(lighting_pipeline.lighting_pipeline),
-            pipeline_cache.get_compute_pipeline(lighting_pipeline.blur_pipeline),
-            pipeline_cache.get_render_pipeline(post_process_pipeline_id.id),
-            images.get(&SURFACE),
-            images.get(&BLUR_SURFACE),
+            pipeline_cache.get_render_pipeline(prepass_pipelines.sdf_pipeline),
+            pipeline_cache.get_render_pipeline(prepass_pipelines.lighting_pipeline),
+            pipeline_cache.get_render_pipeline(prepass_pipelines.blur_pipeline),
+            pipeline_cache.get_render_pipeline(post_process_pipeline_id.0),
         )
         else {
             return Ok(());
         };
 
-        let Lighting2dSurfaceBindGroups {
-            lighting: lighting_bind_group,
-            sdf: sdf_bind_group,
-            blur: blur_bind_group,
-        } = world.resource::<Lighting2dSurfaceBindGroups>();
-
-        let mut lighting_pass = ctx
-            .command_encoder()
-            .begin_compute_pass(&ComputePassDescriptor {
-                label: Some("lighting_pass"),
-                ..default()
-            });
-
-        let workgroup_grid = workgroup_grid_from_image_size(surface.size, WORKGROUP_SIZE);
+        let storage_buffer_support = ctx
+            .render_device()
+            .limits()
+            .max_storage_buffers_per_shader_stage
+            > 0;
 
         // SDF
-        lighting_pass.set_pipeline(sdf_pipeline);
-        lighting_pass.set_bind_group(0, sdf_bind_group, &[view_uniform.offset]);
-        lighting_pass.dispatch_workgroups(workgroup_grid.x, workgroup_grid.y, 1);
+        let mut sdf_pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
+            label: Some("sdf_pass"),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: &aux_textures.sdf.default_view,
+                resolve_target: None,
+                ops: Operations::default(),
+            })],
+            ..default()
+        });
+
+        let mut dynamic_offset = vec![view_uniform.offset];
+        if !storage_buffer_support {
+            dynamic_offset.push(0);
+        }
+
+        sdf_pass.set_render_pipeline(sdf_pipeline);
+        sdf_pass.set_bind_group(0, &bind_groups.sdf, &dynamic_offset[..]);
+        sdf_pass.draw(0..3, 0..1);
+
+        drop(sdf_pass);
 
         // Lighting
-        lighting_pass.set_bind_group(0, lighting_bind_group, &[view_uniform.offset]);
-        lighting_pass.set_pipeline(lighting_pipeline);
-        lighting_pass.dispatch_workgroups(workgroup_grid.x, workgroup_grid.y, 1);
+        let mut lighting_pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
+            label: Some("lighting_pass"),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: &aux_textures.lighting.default_view,
+                resolve_target: None,
+                ops: Operations::default(),
+            })],
+            ..default()
+        });
+
+        let mut dynamic_offset = vec![view_uniform.offset, settings_index.index()];
+        if !storage_buffer_support {
+            dynamic_offset.push(0);
+        }
+
+        lighting_pass.set_render_pipeline(lighting_pipeline);
+        lighting_pass.set_bind_group(0, &bind_groups.lighting, &dynamic_offset[..]);
+        lighting_pass.draw(0..3, 0..1);
 
         drop(lighting_pass);
 
         // Blur
-        let should_blur = world.resource::<ExtractedLighting2dSettings>().blur_coc > 0.0;
+        if settings.blur_coc > 0.0 {
+            let mut blur_pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
+                label: Some("blur_pass"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &aux_textures.blur.default_view,
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Load,
+                        store: StoreOp::Store,
+                    },
+                })],
+                ..default()
+            });
 
-        if should_blur {
-            ctx.command_encoder().copy_texture_to_texture(
-                surface.texture.as_image_copy(),
-                blur_surface.texture.as_image_copy(),
-                Extent3d {
-                    width: blur_surface.size.x,
-                    height: blur_surface.size.y,
-                    ..default()
-                },
+            blur_pass.set_bind_group(
+                0,
+                &bind_groups.blur,
+                &[view_uniform.offset, settings_index.index()],
             );
-
-            let mut blur_pass = ctx
-                .command_encoder()
-                .begin_compute_pass(&ComputePassDescriptor {
-                    label: Some("blur_pass"),
-                    ..default()
-                });
-
-            blur_pass.set_pipeline(blur_pipeline);
-            blur_pass.set_bind_group(0, blur_bind_group, &[]);
-            blur_pass.dispatch_workgroups(workgroup_grid.x, workgroup_grid.y, 1);
+            blur_pass.set_render_pipeline(blur_pipeline);
+            blur_pass.draw(0..3, 0..1);
         }
 
         // Post Process
         let post_process = view_target.post_process_write();
+
+        let sampler = ctx
+            .render_device()
+            .create_sampler(&SamplerDescriptor::default());
 
         let post_process_bind_group = ctx.render_device().create_bind_group(
             "post_process_bind_group",
             &world.resource::<PostProcessPipeline>().layout,
             &BindGroupEntries::sequential((
                 post_process.source,
-                if should_blur {
-                    &blur_surface.texture_view
+                if settings.blur_coc > 0.0 {
+                    &aux_textures.blur.default_view
                 } else {
-                    &surface.texture_view
+                    &aux_textures.lighting.default_view
                 },
-                if should_blur {
-                    &blur_surface.sampler
-                } else {
-                    &surface.sampler
-                },
+                &sampler,
             )),
         );
 

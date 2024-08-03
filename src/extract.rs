@@ -3,43 +3,49 @@ use bevy::{
     render::{render_resource::ShaderType, view::ViewVisibility, Extract},
 };
 
-use crate::{components::LightOccluder2d, prelude::*, resources::Lighting2dSettings};
+use crate::prelude::*;
 
-#[derive(Resource, Clone, ShaderType)]
-pub struct ExtractedAmbientLight2d {
-    pub color: Vec4,
-}
-
-#[derive(Resource, Clone, ShaderType)]
+#[derive(Component, Clone, ShaderType)]
 pub struct ExtractedLighting2dSettings {
     pub blur_coc: f32,
-    pub viewport: UVec2,
+    pub fixed_resolution: u32,
+    pub ambient_light: LinearRgba,
 }
 
-pub fn extract_lighting_resources(
+pub fn extract_lighting_settings(
     mut commands: Commands,
-    ambient_light: Extract<Res<AmbientLight2d>>,
-    lighting_settings: Extract<Res<Lighting2dSettings>>,
+    ambient_light_query: Extract<
+        Query<(Entity, Option<&AmbientLight2d>, Option<&Lighting2dSettings>), With<Camera2d>>,
+    >,
 ) {
-    commands.insert_resource(ExtractedAmbientLight2d {
-        color: ambient_light.color.to_linear().to_vec4() * ambient_light.brightness,
-    });
+    let values = ambient_light_query
+        .iter()
+        .map(|(e, ambient_light, settings)| {
+            let ambient_light = ambient_light.unwrap_or(&AmbientLight2d {
+                color: Color::WHITE,
+                brightness: 1.0,
+            });
 
-    let Lighting2dSettings {
-        shadow_softness,
-        viewport,
-    } = lighting_settings.clone();
-    let UVec2 { x, y } = viewport;
+            let settings = settings.unwrap_or(&Lighting2dSettings {
+                shadow_softness: 0.0,
+                fixed_resolution: true,
+            });
 
-    let viewport_d = ((x + y) as f32).powi(2).sqrt();
+            (
+                e,
+                ExtractedLighting2dSettings {
+                    blur_coc: settings.shadow_softness,
+                    fixed_resolution: if settings.fixed_resolution { 1 } else { 0 },
+                    ambient_light: ambient_light.color.to_linear() * ambient_light.brightness,
+                },
+            )
+        })
+        .collect::<Vec<_>>();
 
-    commands.insert_resource(ExtractedLighting2dSettings {
-        blur_coc: (shadow_softness * viewport_d) / 2000.0,
-        viewport,
-    });
+    commands.insert_or_spawn_batch(values);
 }
 
-#[derive(Debug, Component, Default, Clone, ShaderType)]
+#[derive(Component, Default, Clone, ShaderType)]
 pub struct ExtractedLightOccluder2d {
     pub center: Vec2,
     pub half_size: Vec2,
@@ -52,6 +58,8 @@ pub fn extract_light_occluders(
         Query<(Entity, &LightOccluder2d, &GlobalTransform, &ViewVisibility)>,
     >,
 ) {
+    commands.spawn(ExtractedLightOccluder2d::default());
+
     let mut values = Vec::with_capacity(*previous_len);
 
     for (entity, light_occluder, transform, view_visibility) in &light_occluders_query {
@@ -72,10 +80,10 @@ pub fn extract_light_occluders(
     commands.insert_or_spawn_batch(values);
 }
 
-#[derive(Component, Debug, Clone, ShaderType)]
+#[derive(Component, Default, Clone, ShaderType)]
 pub struct ExtractedPointLight2d {
     pub center: Vec2,
-    pub color: Vec4,
+    pub color: LinearRgba,
     pub falloff: f32,
     pub intensity: f32,
     pub radius: f32,
@@ -86,6 +94,8 @@ pub fn extract_point_lights(
     mut previous_len: Local<usize>,
     point_lights_query: Extract<Query<(Entity, &PointLight2d, &GlobalTransform, &ViewVisibility)>>,
 ) {
+    commands.spawn(ExtractedPointLight2d::default());
+
     let mut values = Vec::with_capacity(*previous_len);
 
     for (entity, point_light, transform, visibility) in point_lights_query.iter() {
@@ -96,7 +106,7 @@ pub fn extract_point_lights(
         values.push((
             entity,
             ExtractedPointLight2d {
-                color: point_light.color.to_linear().to_vec4(),
+                color: point_light.color.to_linear(),
                 center: transform.translation().xy(),
                 radius: point_light.radius,
                 intensity: point_light.intensity,
