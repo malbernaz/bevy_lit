@@ -29,6 +29,10 @@ use crate::{
     },
 };
 
+/// A plugin for adding 2D lighting in the Bevy engine.
+///
+/// This plugin sets up and configures the necessary components and systems for 2D lighting,
+/// including [`AmbientLight2d`], [`Lighting2dSettings`], [`PointLight2d`], and [`LightOccluder2d`].
 #[derive(Default)]
 pub struct Lighting2dPlugin;
 
