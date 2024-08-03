@@ -1,28 +1,32 @@
 # `bevy_lit`
 
-`bevy_lit` is a simple and easy-to-use 2D lighting library for Bevy, designed to work seamlessly with a single camera setup. The library provides basic lighting functionalities through the types: `AmbientLight2d`, `LightOccluder2d`, and `PointLight2d`.
+`bevy_lit` is a simple and easy-to-use 2D lighting library for Bevy, designed to work seamlessly with a single camera setup. The library provides basic lighting functionalities through the types: `Lighting2dSettings`, `AmbientLight2d`, `LightOccluder2d`, and `PointLight2d`.
 
 ![bevy_lit demo](https://github.com/malbernaz/bevy_lit/blob/main/static/demo.png)
 
 ## Features
 
+- **Lighting2dSettings**: Controls lighting parameters such as shadow softness
 - **AmbientLight2d**: Provides a general light source that illuminates the entire scene uniformly.
-- **LightOccluder2d**: Creates shadows and blocks light from `PointLight2d`.
 - **PointLight2d**: Emits light from a specific point, simulating light sources like lamps or torches.
-
-## Disclaimer
-
-Please note that `bevy_lit` is in an early development stage. Users will find bugs and incomplete features. Additionally, the documentation is currently lacking. I appreciate any feedback and contributions to help improve the library.
+- **LightOccluder2d**: Creates shadows and blocks light from `PointLight2d`.
+- Web support both for **WebGPU** and **WebGL2** targets
 
 ## Getting Started
 
 ### Installation
 
-To use it, you can clone the repository directly from GitHub - if you want to fine tune the library to your needs. Or add it to your `Cargo.lock`:
+You can add `bevy_lit` to your `Cargo.lock`:
 
 ```toml
 [dependencies]
 bevy_lit = "0.1"
+```
+
+Or install it using the CLI:
+
+```sh
+cargo add bevy_lit
 ```
 
 ### Demo
@@ -41,22 +45,23 @@ use bevy_lit::prelude::*;
 
 fn main() {
     App::new()
-        .add_plugins((
-            DefaultPlugins,
-            Lighting2dPlugin {
-                ambient_light: AmbientLight2d {
-                    brightness: 0.2,
-                    color: Color::Srgba(Srgba::hex("#C09AFE").unwrap()),
-                },
-                shadow_softness: 32.0,
-            },
-        ))
+        .add_plugins((DefaultPlugins, Lighting2dPlugin))
         .add_systems(Startup, setup)
         .run();
 }
 
 fn setup(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn((
+        Camera2dBundle::default(),
+        Lighting2dSettings {
+            shadow_softness: 32.0,
+            ..default()
+        },
+        AmbientLight2d {
+            brightness: 0.2,
+            color: Color::Srgba(Srgba::hex("#C09AFE").unwrap()),
+        },
+    ));
 
     commands.spawn(PointLight2dBundle {
         point_light: PointLight2d {

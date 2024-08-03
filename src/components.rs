@@ -6,7 +6,7 @@ use bevy::{
     transform::components::{GlobalTransform, Transform},
 };
 
-/// Represents ambient light in a 2D environment.
+/// Represents ambient light in a 2D environment. This component belongs to a [`Camera2d`] entity.
 #[derive(Component, Clone, Reflect)]
 pub struct AmbientLight2d {
     /// The color of the ambient light.
@@ -24,7 +24,7 @@ impl Default for AmbientLight2d {
     }
 }
 
-/// Settings for 2D lighting.
+/// Settings for 2D lighting. This component belongs to a [`Camera2d`] entity.
 #[derive(Component, Clone, Reflect)]
 pub struct Lighting2dSettings {
     /// The softness of the shadows.
