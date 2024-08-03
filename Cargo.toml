@@ -15,6 +15,7 @@ bevy = { version = "0.14", default-features = false, features = [
   "bevy_render",
   "bevy_core_pipeline",
   "bevy_winit",
+  "x11",
 ] }
 
 [dev-dependencies]
@@ -23,6 +24,7 @@ bevy = { version = "0.14", default-features = false, features = [
   "bevy_core_pipeline",
   "bevy_winit",
   "bevy_sprite",
+  "x11",
 ] }
 
 [profile.dev]
