@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2
+
+### Fixes
+
+- Fixes last release `AmbientLight2d` regression
+
 ## 0.2.1
 
 ### Fixes
