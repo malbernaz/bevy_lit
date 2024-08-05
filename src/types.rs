@@ -2,7 +2,10 @@ use bevy::{
     math::Vec2,
     prelude::*,
     reflect::Reflect,
-    render::view::{InheritedVisibility, ViewVisibility, Visibility},
+    render::{
+        render_resource::ShaderType,
+        view::{InheritedVisibility, ViewVisibility, Visibility},
+    },
     transform::components::{GlobalTransform, Transform},
 };
 
@@ -24,6 +27,27 @@ impl Default for AmbientLight2d {
     }
 }
 
+/// Raymarch configuration
+#[derive(Reflect, Clone, ShaderType)]
+pub struct RaymarchSettings {
+    /// The maximum steps the raymarch loop takes to return a result
+    pub max_steps: u32,
+    /// The random jitter contribution to the raymarch to improve accuracy
+    pub jitter_contrib: f32,
+    /// How sharp should the shadow projection be
+    pub shadow_sharpness: f32,
+}
+
+impl Default for RaymarchSettings {
+    fn default() -> Self {
+        Self {
+            max_steps: 32,
+            jitter_contrib: 0.5,
+            shadow_sharpness: 5.0,
+        }
+    }
+}
+
 /// Settings for 2D lighting. This component belongs to a [`Camera2d`] entity and is mandatory for
 /// lighting effects
 #[derive(Component, Clone, Reflect)]
@@ -32,6 +56,8 @@ pub struct Lighting2dSettings {
     pub shadow_softness: f32,
     /// If false, the shadow softness is calculated in relation to the viewport size.
     pub fixed_resolution: bool,
+    /// Raymarch configuration
+    pub raymarch: RaymarchSettings,
 }
 
 impl Default for Lighting2dSettings {
@@ -39,6 +65,7 @@ impl Default for Lighting2dSettings {
         Self {
             shadow_softness: 0.0,
             fixed_resolution: true,
+            raymarch: Default::default(),
         }
     }
 }

@@ -43,16 +43,16 @@ fn create_aux_texture(
 pub struct Lighting2dAuxiliaryTextures {
     pub sdf: CachedTexture,
     pub lighting: CachedTexture,
-    pub blur: CachedTexture,
+    pub blur: Option<CachedTexture>,
 }
 
 pub fn prepare_lighting_auxiliary_textures(
     mut commands: Commands,
     render_device: Res<RenderDevice>,
     mut texture_cache: ResMut<TextureCache>,
-    view_targets: Query<(Entity, &ViewTarget)>,
+    view_targets: Query<(Entity, &ViewTarget, &ExtractedLighting2dSettings)>,
 ) {
-    for (entity, view_target) in &view_targets {
+    for (entity, view_target, settings) in &view_targets {
         commands.entity(entity).insert(Lighting2dAuxiliaryTextures {
             sdf: create_aux_texture(view_target, &mut texture_cache, &render_device, "sdf"),
             lighting: create_aux_texture(
@@ -61,7 +61,16 @@ pub fn prepare_lighting_auxiliary_textures(
                 &render_device,
                 "lighting",
             ),
-            blur: create_aux_texture(view_target, &mut texture_cache, &render_device, "blur"),
+            blur: if settings.blur_coc > 0.0 {
+                Some(create_aux_texture(
+                    view_target,
+                    &mut texture_cache,
+                    &render_device,
+                    "blur",
+                ))
+            } else {
+                None
+            },
         });
     }
 }

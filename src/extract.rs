@@ -10,6 +10,7 @@ pub struct ExtractedLighting2dSettings {
     pub blur_coc: f32,
     pub fixed_resolution: u32,
     pub ambient_light: LinearRgba,
+    pub raymarch: RaymarchSettings,
 }
 
 pub fn extract_lighting_settings(
@@ -32,6 +33,7 @@ pub fn extract_lighting_settings(
                     blur_coc: settings.shadow_softness,
                     fixed_resolution: if settings.fixed_resolution { 1 } else { 0 },
                     ambient_light: ambient_light.color.to_linear() * ambient_light.brightness,
+                    raymarch: settings.raymarch.clone(),
                 },
             )
         })
