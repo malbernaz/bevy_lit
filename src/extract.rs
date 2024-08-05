@@ -15,20 +15,15 @@ pub struct ExtractedLighting2dSettings {
 pub fn extract_lighting_settings(
     mut commands: Commands,
     ambient_light_query: Extract<
-        Query<(Entity, Option<&AmbientLight2d>, Option<&Lighting2dSettings>), With<Camera2d>>,
+        Query<(Entity, &Lighting2dSettings, Option<&AmbientLight2d>), With<Camera2d>>,
     >,
 ) {
     let values = ambient_light_query
         .iter()
-        .map(|(e, ambient_light, settings)| {
+        .map(|(e, settings, ambient_light)| {
             let ambient_light = ambient_light.unwrap_or(&AmbientLight2d {
                 color: Color::WHITE,
                 brightness: 1.0,
-            });
-
-            let settings = settings.unwrap_or(&Lighting2dSettings {
-                shadow_softness: 0.0,
-                fixed_resolution: true,
             });
 
             (

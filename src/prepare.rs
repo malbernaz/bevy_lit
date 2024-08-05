@@ -74,7 +74,7 @@ pub fn prepare_post_process_pipelines(
     pipeline_cache: Res<PipelineCache>,
     mut post_process_pipelines: ResMut<SpecializedRenderPipelines<PostProcessPipeline>>,
     post_process_pipeline: Res<PostProcessPipeline>,
-    views_query: Query<(Entity, &ExtractedView)>,
+    views_query: Query<(Entity, &ExtractedView), With<ExtractedLighting2dSettings>>,
 ) {
     for (entity, view) in &views_query {
         commands
@@ -104,7 +104,7 @@ pub fn prepare_lighting_bind_groups(
     light_settings: Res<ComponentUniforms<ExtractedLighting2dSettings>>,
     point_lights: Res<GpuArrayBuffer<ExtractedPointLight2d>>,
     light_occluders: Res<GpuArrayBuffer<ExtractedLightOccluder2d>>,
-    views_query: Query<(Entity, &Lighting2dAuxiliaryTextures)>,
+    views_query: Query<(Entity, &Lighting2dAuxiliaryTextures), With<ExtractedLighting2dSettings>>,
 ) {
     let (Some(view_uniform), Some(lighting_settings), Some(light_occluders), Some(point_lights)) = (
         view_uniforms.uniforms.binding(),
