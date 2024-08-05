@@ -30,12 +30,12 @@ impl Default for AmbientLight2d {
 /// Raymarch configuration
 #[derive(Reflect, Clone, ShaderType)]
 pub struct RaymarchSettings {
-    /// The maximum steps the raymarch loop takes to return a result
+    /// The maximum steps the raymarch loop can take to return a result
     pub max_steps: u32,
-    /// The random jitter contribution to the raymarch to improve accuracy
+    /// Contributes to the raymarch step improving accuracy
     pub jitter_contrib: f32,
     /// How sharp should the shadow projection be
-    pub shadow_sharpness: f32,
+    pub sharpness: f32,
 }
 
 impl Default for RaymarchSettings {
@@ -43,7 +43,7 @@ impl Default for RaymarchSettings {
         Self {
             max_steps: 32,
             jitter_contrib: 0.5,
-            shadow_sharpness: 5.0,
+            sharpness: 5.0,
         }
     }
 }
@@ -52,18 +52,18 @@ impl Default for RaymarchSettings {
 /// lighting effects
 #[derive(Component, Clone, Reflect)]
 pub struct Lighting2dSettings {
-    /// The softness of the shadows.
-    pub shadow_softness: f32,
-    /// If false, the shadow softness is calculated in relation to the viewport size.
+    /// The blur circle of confusion dimension contributing to thes oftness of the shadows
+    pub blur: f32,
+    /// If true (default), the blur is constant, else it's calculated in relation to the viewport size
     pub fixed_resolution: bool,
-    /// Raymarch configuration
+    /// Raymarch settings
     pub raymarch: RaymarchSettings,
 }
 
 impl Default for Lighting2dSettings {
     fn default() -> Self {
         Self {
-            shadow_softness: 0.0,
+            blur: 0.0,
             fixed_resolution: true,
             raymarch: Default::default(),
         }

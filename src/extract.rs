@@ -7,7 +7,7 @@ use crate::prelude::*;
 
 #[derive(Component, Clone, ShaderType)]
 pub struct ExtractedLighting2dSettings {
-    pub blur_coc: f32,
+    pub blur: f32,
     pub fixed_resolution: u32,
     pub ambient_light: LinearRgba,
     pub raymarch: RaymarchSettings,
@@ -30,7 +30,7 @@ pub fn extract_lighting_settings(
             (
                 e,
                 ExtractedLighting2dSettings {
-                    blur_coc: settings.shadow_softness,
+                    blur: settings.blur,
                     fixed_resolution: if settings.fixed_resolution { 1 } else { 0 },
                     ambient_light: ambient_light.color.to_linear() * ambient_light.brightness,
                     raymarch: settings.raymarch.clone(),

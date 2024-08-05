@@ -61,7 +61,7 @@ pub fn prepare_lighting_auxiliary_textures(
                 &render_device,
                 "lighting",
             ),
-            blur: if settings.blur_coc > 0.0 {
+            blur: if settings.blur > 0.0 {
                 Some(create_aux_texture(
                     view_target,
                     &mut texture_cache,

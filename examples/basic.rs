@@ -24,7 +24,7 @@ fn setup(mut commands: Commands) {
             color: Color::Srgba(Srgba::hex("#C09AFE").unwrap()),
         },
         Lighting2dSettings {
-            shadow_softness: 32.0,
+            blur: 32.0,
             ..default()
         },
     ));

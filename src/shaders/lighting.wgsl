@@ -52,10 +52,17 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     return lighting_color;
 }
 
+fn get_distance(pos: vec2<f32>) -> f32 {
+    let uv = ndc_to_uv(position_world_to_ndc(vec3(pos, 0.0)).xy);
+    let dist = textureSampleLevel(sdf, sdf_sampler, uv, 0.0).r;
+    return dist;
+}
+
 fn square(x: f32) -> f32 {
     return x * x;
 }
 
+// Attribution: https://lisyarus.github.io/blog/posts/point-light-attenuation.html
 fn attenuation(light: PointLight2d, dist: f32) -> f32 {
     let s = dist / light.radius;
     if s > 1.0 {
@@ -65,49 +72,42 @@ fn attenuation(light: PointLight2d, dist: f32) -> f32 {
     return light.intensity * square(1 - s2) / (1 + light.falloff * s2);
 }
 
-fn get_distance(pos: vec2<f32>) -> f32 {
-    let uv = ndc_to_uv(position_world_to_ndc(vec3(pos, 0.0)).xy);
-    let dist = textureSampleLevel(sdf, sdf_sampler, uv, 0.0).r;
-    return dist;
-}
-
 // Implementation follows the demo of this article with some enhancements
 // https://www.rykap.com/2020/09/23/distance-fields
 fn raymarch(light: PointLight2d, ray_origin: vec2<f32>) -> f32 {
-    let raymarch_config = settings.raymarch;
-    let max_steps = raymarch_config.max_steps;
-    let shadow_sharpness = raymarch_config.shadow_sharpness;
-    let jitter_contrib = raymarch_config.jitter_contrib;
+    let config = settings.raymarch;
+    let max_steps = config.max_steps;
+    let sharpness = config.sharpness;
+    let jitter = config.jitter;
 
     let ray_direction = normalize(light.center - ray_origin);
-    let light_distance = length(light.center - ray_origin);
     let stop_at = distance(ray_origin, light.center);
 
     var ray_progress = 0.0;
     var light_contrib = 1.0;
 
     for (var i = 0u; i < max_steps; i++) {
-        if (ray_progress > light_distance) {
+        // ray found target
+        if (ray_progress > stop_at) {
             // 1.0 next to the light and 0.0 at light.radius away
             let fade_ratio = 1.0 - clamp(stop_at / light.radius, 0.0, 1.0);
-            // Fade off quadratically instead of linearly
+            // fade off quadratically instead of linearly
             let distance_factor = pow(fade_ratio, 2.0);
 
-            // ray found target
             return light_contrib * distance_factor;
         }
 
         let dist = get_distance(ray_origin + ray_progress * ray_direction);
 
+        // ray found occluder
         if dist <= 0.0 {
             break;
         }
 
-        light_contrib = min(light_contrib, dist / ray_progress * shadow_sharpness);
+        light_contrib = min(light_contrib, dist / ray_progress * sharpness);
 
-        ray_progress += dist * (1.0 - jitter_contrib) + jitter_contrib * fract(dist * 43758.5453);
+        ray_progress += dist * (1.0 - jitter) + jitter * fract(dist * 43758.5453);
     }
 
-    // ray found occluder
     return 0.0;
 }
