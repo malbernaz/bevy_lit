@@ -26,12 +26,11 @@
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let pos = position_ndc_to_world(frag_coord_to_ndc(in.position)).xy;
 
+    var lighting_color = vec4(settings.ambient_light.rgb, 1.0);
+
     if get_distance(pos) <= 0.0 {
-        return vec4(settings.ambient_light.rgb, 1.0);
+        return lighting_color;
     }
-
-    var lighting_color = vec3(1.0);
-
 
 #if AVAILABLE_STORAGE_BUFFER_BINDINGS >= 6
     let light_count = arrayLength(&lights);
@@ -47,12 +46,12 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
             let raymarch = raymarch(pos, light.center);
 
             if raymarch > 0.0 {
-                lighting_color += light.color.rgb * attenuation(light, dist);
+                lighting_color += vec4(light.color.rgb, 1.0) * attenuation(light, dist);
             }
         }
     }
 
-    return vec4(settings.ambient_light.rgb * lighting_color, 1.0);
+    return lighting_color;
 }
 
 fn square(x: f32) -> f32 {
