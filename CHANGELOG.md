@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1
+
+### Fixes
+
+- `Lighting2dSettings` is now mandatory for the lighting to take effect in a given camera
+- Fixes `AmbientLight2d` not working when `shadow_softness` is set to 0
+
 ## 0.2.0
 
 ### Features

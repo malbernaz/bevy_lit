@@ -24,7 +24,8 @@ impl Default for AmbientLight2d {
     }
 }
 
-/// Settings for 2D lighting. This component belongs to a [`Camera2d`] entity.
+/// Settings for 2D lighting. This component belongs to a [`Camera2d`] entity and is mandatory for
+/// the lighting to take effect
 #[derive(Component, Clone, Reflect)]
 pub struct Lighting2dSettings {
     /// The softness of the shadows.
