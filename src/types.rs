@@ -32,9 +32,9 @@ impl Default for AmbientLight2d {
 pub struct RaymarchSettings {
     /// The maximum steps the raymarch loop can take to return a result
     pub max_steps: u32,
-    /// Contributes to the raymarch step improving accuracy
+    /// Random jitter range (0.0..1.0). Maximizes the number of raymarching steps, improving approximation
     pub jitter_contrib: f32,
-    /// How sharp should the shadow projection be
+    /// How sharp should the shadow projections be
     pub sharpness: f32,
 }
 
