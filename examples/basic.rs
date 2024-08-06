@@ -19,13 +19,18 @@ struct MovingLights;
 fn setup(mut commands: Commands) {
     commands.spawn((
         Camera2dBundle::default(),
+        Lighting2dSettings {
+            blur: 32.0,
+            raymarch: RaymarchSettings {
+                max_steps: 32,
+                jitter_contrib: 0.5,
+                sharpness: 10.0,
+            },
+            ..default()
+        },
         AmbientLight2d {
             brightness: 0.2,
             color: Color::Srgba(Srgba::hex("#C09AFE").unwrap()),
-        },
-        Lighting2dSettings {
-            blur: 32.0,
-            ..default()
         },
     ));
 
