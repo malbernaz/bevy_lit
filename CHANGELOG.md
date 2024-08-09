@@ -10,12 +10,12 @@
 ### Migration
 
 ```diff
-+ Lighting2dSettings {
+  Lighting2dSettings {
 -    shadow_softness: 32.0,
 +    blur: 32.0,
 +    raymarch: RaymarchSettings::default(),
-+    ..default()
-+ }
+     ..default()
+  }
 ```
 
 ## 0.2.2
