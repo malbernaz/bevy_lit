@@ -210,7 +210,6 @@ impl ViewNode for LightingNode {
         Read<Lighting2dPostProcessPipelineId>,
         Read<Lighting2dAuxiliaryTextures>,
         Read<Lighting2dSurfaceBindGroups>,
-        Read<ExtractedLighting2dSettings>,
         Read<DynamicUniformIndex<ExtractedLighting2dSettings>>,
     );
 
@@ -224,7 +223,6 @@ impl ViewNode for LightingNode {
             post_process_pipeline_id,
             aux_textures,
             bind_groups,
-            settings,
             settings_index,
         ): QueryItem<'w, Self::ViewQuery>,
         world: &'w World,
@@ -298,11 +296,11 @@ impl ViewNode for LightingNode {
         drop(lighting_pass);
 
         // Blur
-        if settings.blur_coc > 0.0 {
+        if let Some(blur_texture) = &aux_textures.blur {
             let mut blur_pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
                 label: Some("blur_pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &aux_textures.blur.default_view,
+                    view: &blur_texture.default_view,
                     resolve_target: None,
                     ops: Operations {
                         load: LoadOp::Load,
@@ -333,8 +331,8 @@ impl ViewNode for LightingNode {
             &world.resource::<PostProcessPipeline>().layout,
             &BindGroupEntries::sequential((
                 post_process.source,
-                if settings.blur_coc > 0.0 {
-                    &aux_textures.blur.default_view
+                if let Some(blur_texture) = &aux_textures.blur {
+                    &blur_texture.default_view
                 } else {
                     &aux_textures.lighting.default_view
                 },

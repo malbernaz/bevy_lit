@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.0
+
+### Features
+
+- Real soft shadows (the blur effect still available, but the shadow softness implementation doesn't depend on it anymore)
+- Raymarch settings configuration
+
+### Migration
+
+```diff
+  Lighting2dSettings {
+-    shadow_softness: 32.0,
++    blur: 32.0,
++    raymarch: RaymarchSettings::default(),
+     ..default()
+  }
+```
+
 ## 0.2.2
 
 ### Fixes

@@ -16,15 +16,15 @@
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let pos = position_ndc_to_world(frag_coord_to_ndc(in.position)).xy;
 
-    var sdf = occluder_sd(pos, occluders[0]);
-
 #if AVAILABLE_STORAGE_BUFFER_BINDINGS >= 6
     let occluder_count = arrayLength(&occluders);
 #else
     let occluder_count = MAX_OCCLUDERS;
 #endif
 
-    for (var i = 1u; i < occluder_count; i++) {
+    // TODO: skiping first occluder that is a dummy. Find way to remove this.
+    var sdf = occluder_sd(pos, occluders[1]);
+    for (var i = 2u; i < occluder_count; i++) {
         sdf = min(sdf, occluder_sd(pos, occluders[i]));
     }
 
