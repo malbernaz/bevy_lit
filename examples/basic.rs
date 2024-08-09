@@ -91,7 +91,7 @@ fn setup(mut commands: Commands) {
         PointLight2dBundle {
             point_light: PointLight2d {
                 intensity: 4.0,
-                radius: 300.0,
+                radius: 400.0,
                 falloff: 3.0,
                 color: Color::srgb(1.0, 1.0, 0.0),
             },
