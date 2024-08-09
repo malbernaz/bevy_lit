@@ -27,12 +27,12 @@ impl Default for AmbientLight2d {
     }
 }
 
-/// Raymarch configuration
+/// Raymarch settings
 #[derive(Reflect, Clone, ShaderType)]
 pub struct RaymarchSettings {
     /// The maximum steps the raymarch loop can take to return a result
     pub max_steps: u32,
-    /// Random jitter range (0.0..1.0). Maximizes the number of raymarching steps, improving approximation
+    /// Random number from 0.0 to 1.0. Maximizes the number of raymarching steps, improving approximation
     pub jitter_contrib: f32,
     /// How sharp should the shadow projections be
     pub sharpness: f32,
@@ -52,7 +52,7 @@ impl Default for RaymarchSettings {
 /// lighting effects
 #[derive(Component, Clone, Reflect)]
 pub struct Lighting2dSettings {
-    /// The blur circle of confusion dimension contributing to thes oftness of the shadows
+    /// The blur coc (circle of confusion) dimension contributing to the softness of the shadows
     pub blur: f32,
     /// If true (default), the blur is constant, else it's calculated in relation to the viewport size
     pub fixed_resolution: bool,
