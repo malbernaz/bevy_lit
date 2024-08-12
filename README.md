@@ -20,7 +20,7 @@ You can add `bevy_lit` to your `Cargo.lock`:
 
 ```toml
 [dependencies]
-bevy_lit = "0.2"
+bevy_lit = "0.3"
 ```
 
 Or install it using the CLI:
