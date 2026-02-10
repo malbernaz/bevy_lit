@@ -11,7 +11,7 @@ A simple 2D lighting library **designed for Bevy**.
 - Light occlusion through `LightOccluder2d` that can be used along side any `Mesh2d`
 - Per camera fine grain control over lighting parameters such as shadow softness and more
 - Terraria-like light penetration effect
-- Web support for WebGPU
+- Web support for WebGPU and WebGL2
 
 ## Getting started
 
