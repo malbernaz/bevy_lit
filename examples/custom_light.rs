@@ -17,8 +17,10 @@ use bevy_lit::prelude::*;
 pub struct ToonLight2d {
     #[texture(0, dimension = "1d")]
     pub gradient_map: Handle<Image>,
+    // We need 16-byte alignment for all fields of the `AsBindGroup` struct if we want to support WebGL2.
+    // This is why we are using `Vec4` here instead of `f32`.
     #[uniform(1)]
-    pub radius: f32,
+    pub radius: Vec4,
     #[uniform(2)]
     pub color: LinearRgba,
 }
@@ -27,7 +29,7 @@ impl Default for ToonLight2d {
     fn default() -> Self {
         Self {
             gradient_map: Default::default(),
-            radius: 200.0,
+            radius: Vec4::splat(200.0),
             color: LinearRgba::WHITE,
         }
     }
@@ -39,7 +41,7 @@ impl Light2dMaterial for ToonLight2d {
     }
 
     fn light_size(&self) -> Light2dSize {
-        (self.radius * 2.0).into()
+        (self.radius.x * 2.0).into()
     }
 }
 
@@ -84,7 +86,7 @@ fn setup(
 
     commands.spawn(ToonLight2d {
         gradient_map: images.add(gradient_map),
-        radius: 300.0,
+        radius: Vec4::splat(300.0),
         color: Color::from(YELLOW_100).to_linear(),
     });
 

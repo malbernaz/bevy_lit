@@ -4,7 +4,7 @@
 }
 
 @group(1) @binding(0) var gradient_map: texture_1d<f32>;
-@group(1) @binding(1) var<uniform> radius: f32;
+@group(1) @binding(1) var<uniform> radius: vec4<f32>;
 @group(1) @binding(2) var<uniform> color: vec4<f32>;
 
 @fragment
@@ -13,7 +13,7 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let light_center = in.translation_rotation.xy;
     let light_dist = distance(pos, light_center);
 
-    let t = 1.0 - (light_dist / radius);
+    let t = 1.0 - (light_dist / radius.x);
     let n_levels = f32(textureDimensions(gradient_map));
     let idx = u32(ceil(t * (n_levels - 1.0)));
 
