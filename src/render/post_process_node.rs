@@ -21,6 +21,7 @@ use crate::{
     },
     render::{FlipTexture, LightingTextures, VoronoiTextures},
     settings::PenetrationSettings,
+    wrappers::IVec2Uniform,
 };
 
 pub fn run_penetration_pass<'w>(
@@ -92,7 +93,7 @@ pub fn run_blur_pass<'w>(
     render_context: &mut RenderContext<'w>,
     lighting_texture: &mut FlipTexture,
     settings_uniform_offset: u32,
-    direction: IVec2,
+    direction: IVec2Uniform,
 ) {
     let post_process_pipelines = world.resource::<Lighting2dPostProcessPipelines>();
     let pipeline_cache = world.resource::<PipelineCache>();
@@ -254,14 +255,14 @@ impl ViewNode for Light2dPostProcessDrawNode {
                 render_context,
                 &mut lighting_texture,
                 settings_uniform_index.index(),
-                IVec2::new(1, 0),
+                IVec2Uniform::new(1, 0),
             );
             run_blur_pass(
                 world,
                 render_context,
                 &mut lighting_texture,
                 settings_uniform_index.index(),
-                IVec2::new(0, 1),
+                IVec2Uniform::new(0, 1),
             );
         }
 

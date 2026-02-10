@@ -1,13 +1,13 @@
 #import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
-#import bevy_lit::settings_types::Lighting2dSettings
+#import bevy_lit::{settings_types::Lighting2dSettings, wrappers_types::IVec2Uniform}
 
 @group(0) @binding(0) var<uniform> settings: Lighting2dSettings;
-@group(0) @binding(1) var<uniform> direction: vec2<i32>;
+@group(0) @binding(1) var<uniform> direction: IVec2Uniform;
 @group(0) @binding(2) var texture: texture_2d<f32>;
 
 @fragment
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
-    return gaussian_blur(in.position.xy, direction, settings.blur);
+    return gaussian_blur(in.position.xy, direction.inner, settings.blur);
 }
 
 fn gaussian_weight(x: f32, sigma: f32) -> f32 {

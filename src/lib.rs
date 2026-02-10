@@ -8,6 +8,7 @@ mod post_process;
 mod render;
 mod settings;
 mod voronoi;
+mod wrappers;
 
 /// `use bevy_lit::prelude::*;` to import common components and plugins
 pub mod prelude {

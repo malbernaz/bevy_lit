@@ -43,7 +43,7 @@ use bevy::{
 use crate::{
     occlusion::LightOccluder2d,
     prelude::Lighting2dSettings,
-    render::{extract_light2d_phases, VoronoiPhase},
+    render::{VoronoiPhase, extract_light2d_phases}, wrappers::UVec2Uniform,
 };
 
 pub struct Voronoi2dPlugin;
@@ -528,7 +528,7 @@ pub fn init_flood_pipeline(
             (
                 texture_2d(TextureSampleType::Float { filterable: true }),
                 sampler(SamplerBindingType::Filtering),
-                uniform_buffer::<UVec2>(false),
+                uniform_buffer::<UVec2Uniform>(false),
             ),
         ),
     );

@@ -16,7 +16,7 @@ use bevy::{
 
 use crate::{
     render::{FlipTexture, VoronoiPhase, VoronoiTextures},
-    voronoi::FloodPipeline,
+    voronoi::FloodPipeline, wrappers::UVec2Uniform,
 };
 
 pub fn run_mask_pass<'w>(
@@ -101,7 +101,7 @@ pub fn run_flood_pass<'w>(
     render_context: &mut RenderContext<'w>,
     camera: &ExtractedCamera,
     voronoi_texture: &mut FlipTexture,
-    step: UVec2,
+    step: UVec2Uniform,
 ) {
     let flood_pipeline = world.resource::<FloodPipeline>();
 
@@ -212,7 +212,7 @@ impl ViewNode for VoronoiDrawNode {
                 render_context,
                 camera,
                 &mut voronoi_texture,
-                UVec2::new(x_step.max(1), y_step.max(1)),
+                UVec2Uniform::new(x_step.max(1), y_step.max(1)),
             );
 
             step /= 2;
@@ -224,7 +224,7 @@ impl ViewNode for VoronoiDrawNode {
             render_context,
             camera,
             &mut voronoi_texture,
-            UVec2::new(1, 1),
+            UVec2Uniform::new(1, 1),
         );
 
         Ok(())
