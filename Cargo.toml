@@ -24,7 +24,7 @@ fixedbitset = "0.5.7"
 
 [dev-dependencies]
 bevy = { version = "0.18.1", features = ["bevy_dev_tools"] }
-rand = { version = "0.9.2" }
+rand = { version = "0.10.1" }
 
 [profile.dev]
 opt-level = 1

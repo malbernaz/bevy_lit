@@ -5,7 +5,8 @@ use bevy::{
     window::PresentMode,
 };
 use bevy_lit::prelude::*;
-use rand::{self, rngs::SmallRng, Rng, SeedableRng};
+use rand::RngExt;
+use rand::{rngs::SmallRng, SeedableRng};
 
 fn main() {
     App::new()
