@@ -51,7 +51,7 @@ pub fn run_penetration_pass<'w>(
 
     let bind_group = render_context.render_device().create_bind_group(
         "penetration_bind_group",
-        &post_process_pipelines.penetration_layout,
+        &pipeline_cache.get_bind_group_layout(&post_process_pipelines.penetration_layout),
         &BindGroupEntries::sequential((
             view_uniforms,
             lighting_settings_uniforms,
@@ -114,7 +114,7 @@ pub fn run_blur_pass<'w>(
 
     let bind_group = render_context.render_device().create_bind_group(
         "blur_bind_group",
-        &post_process_pipelines.blur_layout,
+        &pipeline_cache.get_bind_group_layout(&post_process_pipelines.blur_layout),
         &BindGroupEntries::sequential((
             lighting_settings_uniforms,
             direction,
@@ -166,7 +166,8 @@ pub fn run_composite_pass<'w>(
 
     let bind_group = render_context.render_device().create_bind_group(
         "composite_bind_group",
-        &world.resource::<Lighting2dCompositePipeline>().layout,
+        &pipeline_cache
+            .get_bind_group_layout(&world.resource::<Lighting2dCompositePipeline>().layout),
         &BindGroupEntries::sequential((
             lighting_settings_uniforms,
             post_process.source,

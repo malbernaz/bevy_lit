@@ -2,7 +2,7 @@ use bevy::{
     asset::{embedded_asset, load_embedded_asset, AssetEventSystems},
     core_pipeline::FullscreenShader,
     ecs::{
-        component::Tick,
+        change_detection::Tick,
         system::{lifetimeless::SRes, SystemChangeTick, SystemParamItem},
     },
     math::FloatOrd,
@@ -19,7 +19,7 @@ use bevy::{
         },
         render_resource::{
             binding_types::{sampler, texture_2d, uniform_buffer},
-            BindGroup, BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries,
+            BindGroup, BindGroupEntries, BindGroupLayoutDescriptor, BindGroupLayoutEntries,
             CachedRenderPipelineId, ColorTargetState, ColorWrites, FragmentState, PipelineCache,
             RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor, ShaderStages,
             SpecializedMeshPipeline, SpecializedMeshPipelineError, SpecializedMeshPipelines,
@@ -220,7 +220,7 @@ fn extract_voronoi_materials(
 #[derive(Resource)]
 pub struct MaskPipeline {
     pub mesh_pipeline: Mesh2dPipeline,
-    pub material_layout: BindGroupLayout,
+    pub material_layout: BindGroupLayoutDescriptor,
     pub shader: Handle<Shader>,
 }
 
@@ -259,14 +259,13 @@ impl SpecializedMeshPipeline for MaskPipeline {
 
 pub fn init_mask_pipeline(
     mut commands: Commands,
-    render_device: Res<RenderDevice>,
     mesh_2d_pipeline: Res<Mesh2dPipeline>,
     asset_server: Res<AssetServer>,
 ) {
     commands.insert_resource(MaskPipeline {
         mesh_pipeline: mesh_2d_pipeline.clone(),
         shader: load_embedded_asset!(asset_server.as_ref(), "mask.wgsl"),
-        material_layout: render_device.create_bind_group_layout(
+        material_layout: BindGroupLayoutDescriptor::new(
             "mask_material_bind_group_layout",
             &BindGroupLayoutEntries::sequential(
                 ShaderStages::FRAGMENT,
@@ -424,6 +423,7 @@ pub fn prepare_mask_material_bind_groups(
     images: Res<RenderAssets<GpuImage>>,
     fallback_image: Res<FallbackImage>,
     voronoi_materials: Res<RenderVoronoiMaterials>,
+    pipeline_cache: Res<PipelineCache>,
     mut bind_groups: ResMut<MaskMaterialBindGroups>,
 ) {
     // Only update bind groups for entities that have changed or are new
@@ -438,7 +438,7 @@ pub fn prepare_mask_material_bind_groups(
         let sampler = render_device.create_sampler(&SamplerDescriptor::default());
         let bind_group = render_device.create_bind_group(
             "mask_material_bind_group",
-            &pipeline.material_layout,
+            &pipeline_cache.get_bind_group_layout(&pipeline.material_layout),
             &BindGroupEntries::sequential((&alpha_mask_image.texture_view, &sampler)),
         );
         bind_groups.insert(*entity, bind_group);
@@ -478,20 +478,19 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetMaskMaterialBindGroup
 
 #[derive(Resource)]
 pub struct FloodPipeline {
-    pub seed_layout: BindGroupLayout,
+    pub seed_layout: BindGroupLayoutDescriptor,
     pub seed_pipeline: CachedRenderPipelineId,
-    pub layout: BindGroupLayout,
+    pub layout: BindGroupLayoutDescriptor,
     pub pipeline: CachedRenderPipelineId,
 }
 
 pub fn init_flood_pipeline(
     mut commands: Commands,
-    render_device: Res<RenderDevice>,
     fullscreen_shader: Res<FullscreenShader>,
     pipeline_cache: Res<PipelineCache>,
     asset_server: Res<AssetServer>,
 ) {
-    let seed_layout = render_device.create_bind_group_layout(
+    let seed_layout = BindGroupLayoutDescriptor::new(
         "flood_seed_bind_group_layout",
         &BindGroupLayoutEntries::sequential(
             ShaderStages::FRAGMENT,
@@ -521,7 +520,7 @@ pub fn init_flood_pipeline(
         ..default()
     });
 
-    let layout = render_device.create_bind_group_layout(
+    let layout = BindGroupLayoutDescriptor::new(
         "flood_bind_group_layout",
         &BindGroupLayoutEntries::sequential(
             ShaderStages::FRAGMENT,

@@ -71,6 +71,7 @@ fn setup(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
 
 | `bevy`   | `bevy_lit`  |
 | -------- | ----------- |
+| `0.18`   | `0.10`      |
 | `0.17.3` | `0.9`       |
 | `0.17`   | `0.8`       |
 | `0.16`   | `0.7`       |

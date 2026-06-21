@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.0
+
+### Features
+
+- **Bevy 0.18 support** – upgraded to the latest Bevy release
+
 ## 0.9.1
 
 ### Fix

@@ -1,5 +1,6 @@
 use bevy::{
     color::palettes::tailwind::{BLUE_300, BLUE_600, GRAY_200, GRAY_700, YELLOW_600},
+    input::mouse::MouseButtonInput,
     prelude::*,
     window::PrimaryWindow,
 };
@@ -10,7 +11,7 @@ fn main() {
         .add_plugins((DefaultPlugins, Lighting2dPlugin))
         .insert_resource(ClearColor(Color::from(GRAY_200)))
         .add_systems(Startup, setup)
-        .add_systems(Update, update_cursor_light)
+        .add_systems(Update, (update_cursor_light, despawn_shapes))
         .add_systems(FixedUpdate, update_moving_lights)
         .run();
 }
@@ -124,6 +125,22 @@ fn update_cursor_light(
         .map(|ray| ray.origin.truncate().extend(0.0))
     {
         point_light_transform.translation = world_position;
+    }
+}
+
+fn despawn_shapes(
+    mut commands: Commands,
+    lights: Query<Entity, With<PointLight2d>>,
+    mut mouse_button_events: MessageReader<MouseButtonInput>,
+) {
+    // Check if any mouse button was pressed
+    for event in mouse_button_events.read() {
+        if event.state.is_pressed() {
+            // Despawn one shape per click
+            if let Some(entity) = lights.iter().next() {
+                commands.entity(entity).despawn();
+            }
+        }
     }
 }
 
