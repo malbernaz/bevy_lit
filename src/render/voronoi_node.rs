@@ -220,4 +220,3 @@ pub fn voronoi_render_system(
         UVec2::new(1, 1),
     );
 }
-
