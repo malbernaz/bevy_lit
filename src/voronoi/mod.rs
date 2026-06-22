@@ -135,7 +135,10 @@ pub fn check_occluders_needing_specialization(
 
     par_local.drain_into(&mut entities_needing_specialization.changed);
 
-    for entity in removed_mesh_2d_components.read().chain(removed_mask_components.read()) {
+    for entity in removed_mesh_2d_components
+        .read()
+        .chain(removed_mask_components.read())
+    {
         entities_needing_specialization.removed.push(entity);
     }
 }
@@ -346,12 +349,8 @@ pub fn specialize_mask_meshes(
                     mesh.index_format(),
                 );
 
-            let pipeline_id = mask_pipelines.specialize(
-                &pipeline_cache,
-                &mask_pipeline,
-                mesh_key,
-                &mesh.layout,
-            );
+            let pipeline_id =
+                mask_pipelines.specialize(&pipeline_cache, &mask_pipeline, mesh_key, &mesh.layout);
             let pipeline_id = match pipeline_id {
                 Ok(id) => id,
                 Err(err) => {
@@ -374,7 +373,9 @@ pub fn queue_mask_meshes(
     render_material_instances: Res<RenderVoronoiMaterials>,
     dirty_specializations: Res<DirtySpecializations>,
     mut pending_mask_queues: ResMut<PendingMaskQueues>,
-    specialized_material_pipeline_cache: ResMut<SpecializedMaterial2dPipelineCache<LightOccluder2d>>,
+    specialized_material_pipeline_cache: ResMut<
+        SpecializedMaterial2dPipelineCache<LightOccluder2d>,
+    >,
 ) {
     if render_material_instances.is_empty() {
         return;
@@ -397,7 +398,9 @@ pub fn queue_mask_meshes(
 
         let view_pending_mask_queues = pending_mask_queues
             .get_mut(&view.retained_view_entity)
-            .expect("View pending mask queues should have been created in `prepare_pending_mask_queues`");
+            .expect(
+            "View pending mask queues should have been created in `prepare_pending_mask_queues`",
+        );
 
         let draw_mask_mesh = mask_draw_functions.read().id::<DrawMaskMesh>();
 
@@ -456,11 +459,15 @@ pub fn queue_mask_meshes(
 
             // Occluders persist between frames; the change-list `remove` above and
             // the per-removed-entity dequeue handle additions/removals.
+            //
+            // Like Bevy's `Transparent2d`, we use `Entity::PLACEHOLDER` as the
+            // render entity so that `DirtySpecializations`-driven dequeues (which
+            // only track main-world entities) match the stored item key.
             mask_phase.add_retained(VoronoiPhase {
                 sort_key: FloatOrd(mesh_instance.transforms.world_from_local.translation.z),
                 pipeline: pipeline_id,
                 draw_function: draw_mask_mesh,
-                entity: (*render_entity, *visible_entity),
+                entity: (Entity::PLACEHOLDER, *visible_entity),
                 batch_range: 0..1,
                 extra_index: PhaseItemExtraIndex::None,
                 indexed: mesh.indexed(),
