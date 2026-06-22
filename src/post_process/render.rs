@@ -12,7 +12,7 @@ use bevy::{
             TextureSampleType,
         },
         sync_world::RenderEntity,
-        view::{ExtractedView, ViewTarget, ViewUniform},
+        view::{ExtractedView, ViewUniform},
         Extract,
     },
     shader::Shader,
@@ -51,7 +51,7 @@ fn create_post_process_pipeline(
                 write_mask: ColorWrites::ALL,
             })],
         }),
-        push_constant_ranges: vec![],
+        immediate_size: 0,
         primitive: Default::default(),
         depth_stencil: None,
         multisample: Default::default(),
@@ -139,7 +139,7 @@ pub fn init_lighting2d_composite_pipeline(
 
 #[derive(Eq, PartialEq, Hash, Clone, Copy)]
 pub struct Lighting2dPipelineKey {
-    pub hdr: bool,
+    pub target_format: TextureFormat,
     pub msaa_samples: u32,
 }
 
@@ -156,11 +156,7 @@ impl SpecializedRenderPipeline for Lighting2dCompositePipeline {
                 shader_defs: vec![],
                 entry_point: Some("fragment".into()),
                 targets: vec![Some(ColorTargetState {
-                    format: if key.hdr {
-                        ViewTarget::TEXTURE_FORMAT_HDR
-                    } else {
-                        TextureFormat::bevy_default()
-                    },
+                    format: key.target_format,
                     blend: None,
                     write_mask: ColorWrites::ALL,
                 })],
@@ -168,7 +164,7 @@ impl SpecializedRenderPipeline for Lighting2dCompositePipeline {
             primitive: Default::default(),
             depth_stencil: None,
             multisample: Default::default(),
-            push_constant_ranges: vec![],
+            immediate_size: 0,
             zero_initialize_workgroup_memory: false,
         }
     }
@@ -223,7 +219,7 @@ pub fn prepare_composite_pipelines(
                     &pipeline_cache,
                     &composite_pipeline,
                     Lighting2dPipelineKey {
-                        hdr: view.hdr,
+                        target_format: view.target_format,
                         msaa_samples: msaa.samples(),
                     },
                 ),

@@ -27,7 +27,7 @@ fn main() {
         .run();
 }
 
-#[derive(Component)]
+#[derive(Component, Default, Clone)]
 struct Torch;
 
 fn setup(
@@ -36,46 +36,41 @@ fn setup(
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
     // lighting camera
-    commands.spawn((
-        Camera2d,
-        Projection::Orthographic(OrthographicProjection {
-            scale: 0.5,
-            ..OrthographicProjection::default_2d()
-        }),
-        Lighting2dSettings::default(),
-    ));
+    let mut camera = commands.spawn_scene(bsn! {
+        Camera2d
+        Lighting2dSettings
+    });
+    camera.insert(Projection::Orthographic(OrthographicProjection {
+        scale: 0.5,
+        ..OrthographicProjection::default_2d()
+    }));
 
     // spawn point light
-    commands.spawn((
-        Torch,
-        PointLight2d {
-            color: Color::WHITE,
-            intensity: 3.0,
-            outer_radius: 200.0,
-            falloff: 1.0,
-            ..default()
-        },
-    ));
+    commands.spawn_scene(bsn! {
+        Torch
+        PointLight2d { color: { Color::WHITE }, intensity: 3.0, outer_radius: 200.0, falloff: 1.0 }
+    });
 
     let mut rng = SmallRng::seed_from_u64(0);
-    let mesh = Mesh2d(meshes.add(Circle::new(4.)));
-    let material = MeshMaterial2d(materials.add(Color::from(GRAY_800)));
+    let mesh = meshes.add(Circle::new(4.));
+    let material = materials.add(Color::from(GRAY_800));
 
-    // spawns 32732 light occluders
+    // spawns ~16k light occluders
+    let mut occluder_scenes = Vec::new();
     for x in -128..128 {
         for y in -128..128 {
             if x == 0 || rng.random_bool(0.5) {
                 continue;
             }
-
-            commands.spawn((
-                mesh.clone(),
-                material.clone(),
-                LightOccluder2d::default(),
-                Transform::from_translation(Vec3::new((x * 16) as f32, (y * 16) as f32, 0.0)),
-            ));
+            let m = mesh.clone();
+            let mat = material.clone();
+            occluder_scenes.push(bsn! {
+                Mesh2d(m) MeshMaterial2d::<ColorMaterial>(mat) LightOccluder2d
+                Transform::from_translation(Vec3::new((x * 16) as f32, (y * 16) as f32, 0.0))
+            });
         }
     }
+    commands.spawn_scene_list(occluder_scenes);
 }
 
 fn move_entities(

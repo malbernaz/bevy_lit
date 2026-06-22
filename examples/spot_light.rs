@@ -14,7 +14,7 @@ fn main() {
         .run();
 }
 
-#[derive(Component)]
+#[derive(Component, Default, Clone)]
 struct CursorLight;
 
 const X_EXTENT: f32 = 700.;
@@ -24,29 +24,20 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
-    commands.spawn((
-        Camera2d,
-        Lighting2dSettings {
-            scale: 1.0,
-            ..default()
-        },
-        AmbientLight2d {
-            intensity: 0.2,
-            ..default()
-        },
-    ));
+    commands.spawn_scene(bsn! {
+        Camera2d
+        Lighting2dSettings { scale: 1.0 }
+        AmbientLight2d { intensity: 0.2 }
+    });
 
-    commands.spawn((
-        CursorLight,
-        SpotLight2d {
-            intensity: 4.0,
-            outer_radius: 1024.0,
-            outer_angle: 15.0,
-            ..default()
-        },
-        Transform::from_xyz(0.0, 512.0, 0.0)
-            .with_rotation(Quat::from_rotation_z(-90_f32.to_radians())),
-    ));
+    commands.spawn_scene(bsn! {
+        CursorLight
+        SpotLight2d { intensity: 4.0, outer_radius: 1024.0, outer_angle: 15.0 }
+        Transform {
+            translation: { Vec3::new(0.0, 512.0, 0.0) },
+            rotation: { Quat::from_rotation_z(-90_f32.to_radians()) },
+        }
+    });
 
     let shapes = [
         meshes.add(Circle::new(50.0)),
@@ -64,18 +55,16 @@ fn setup(
     let color = materials.add(Color::from(GRAY_700));
     let num_shapes = shapes.len();
 
+    let mut shape_scenes = Vec::new();
     for (i, shape) in shapes.into_iter().enumerate() {
-        commands.spawn((
-            Mesh2d(shape),
-            MeshMaterial2d(color.clone()),
-            LightOccluder2d::default(),
-            Transform::from_xyz(
-                -X_EXTENT / 2. + i as f32 / (num_shapes - 1) as f32 * X_EXTENT,
-                0.0,
-                0.0,
-            ),
-        ));
+        let material = color.clone();
+        let x = -X_EXTENT / 2. + i as f32 / (num_shapes - 1) as f32 * X_EXTENT;
+        shape_scenes.push(bsn! {
+            Mesh2d(shape) MeshMaterial2d::<ColorMaterial>(material) LightOccluder2d
+            Transform::from_xyz(x, 0.0, 0.0)
+        });
     }
+    commands.spawn_scene_list(shape_scenes);
 }
 
 fn update_cursor_light(

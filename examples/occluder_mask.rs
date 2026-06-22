@@ -15,78 +15,64 @@ fn main() {
         .run();
 }
 
-#[derive(Component)]
+#[derive(Component, Default, Clone)]
 struct CursorLight;
 
-#[derive(Component)]
+#[derive(Component, Default, Clone)]
 struct MovingLights;
 
 const X_EXTENT: f32 = 700.;
 
 fn setup(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, assets: Res<AssetServer>) {
-    commands.spawn((
-        Camera2d,
+    commands.spawn_scene(bsn! {
+        Camera2d
         Lighting2dSettings {
             blur: 4,
             edge_intensity: 4.0,
-            raymarch: RaymarchSettings {
-                max_steps: 32,
-                jitter_contrib: 0.5,
-                sharpness: 10.0,
-            },
-            ..default()
-        },
-        AmbientLight2d {
-            intensity: 0.1,
-            color: Color::from(BLUE_300),
-        },
-    ));
+            raymarch: RaymarchSettings { max_steps: 32, jitter_contrib: 0.5, sharpness: 10.0 },
+        }
+        AmbientLight2d { intensity: 0.1, color: { Color::from(BLUE_300) } }
+    });
 
     let lettering_handle = assets.load("abc.png");
+    let sprite_image = lettering_handle.clone();
+    let occluder_mask = lettering_handle;
 
-    commands.spawn((
-        Mesh2d(meshes.add(Rectangle::new(411., 200.))),
-        Sprite {
-            image: lettering_handle.clone(),
-            ..default()
-        },
-        LightOccluder2d::new(lettering_handle),
-    ));
+    commands.spawn_scene(bsn! {
+        Mesh2d({ meshes.add(Rectangle::new(411., 200.)) })
+        Sprite { image: sprite_image, color: { Color::WHITE } }
+        LightOccluder2d { occluder_mask: occluder_mask }
+    });
 
-    let point_light = PointLight2d {
-        intensity: 2.0,
-        outer_radius: 1100.0,
-        falloff: 3.0,
-        color: Color::from(BLUE_600),
-        ..default()
-    };
+    commands.spawn_scene(bsn! {
+        MovingLights
+        Transform
+        Visibility
+        Children [
+            PointLight2d {
+                intensity: 2.0,
+                outer_radius: 1100.0,
+                falloff: 3.0,
+                color: { Color::from(BLUE_600) },
+            } Transform::from_xyz(-X_EXTENT + 50. / 2., 0.0, 0.0),
+            PointLight2d {
+                intensity: 2.0,
+                outer_radius: 1100.0,
+                falloff: 3.0,
+                color: { Color::from(BLUE_600) },
+            } Transform::from_xyz(X_EXTENT + 50. / 2., 0.0, 0.0),
+        ]
+    });
 
-    commands.spawn((
-        MovingLights,
-        Transform::default(),
-        Visibility::default(),
-        children![
-            (
-                point_light.clone(),
-                Transform::from_xyz(-X_EXTENT + 50. / 2., 0.0, 0.0),
-            ),
-            (
-                point_light,
-                Transform::from_xyz(X_EXTENT + 50. / 2., 0.0, 0.0),
-            )
-        ],
-    ));
-
-    commands.spawn((
-        CursorLight,
+    commands.spawn_scene(bsn! {
+        CursorLight
         PointLight2d {
-            color: Color::from(YELLOW_600),
+            color: { Color::from(YELLOW_600) },
             intensity: 2.0,
             outer_radius: 400.0,
             falloff: 10.0,
-            ..default()
-        },
-    ));
+        }
+    });
 }
 
 fn update_cursor_light(

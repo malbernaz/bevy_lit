@@ -46,24 +46,21 @@ fn main() {
 }
 
 fn setup(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
-    commands.spawn((
-        Camera2d,
-        Lighting2dSettings::default(),
-    ));
-
-    commands.spawn(PointLight2d {
-        color: Color::WHITE,
-        intensity: 3.0,
-        outer_radius: 200.0,
-        falloff: 2.0,
-        ..default(),
+    commands.spawn_scene(bsn! {
+        Camera2d
+        Lighting2dSettings
     });
 
-    commands.spawn((
-        Mesh2d(meshes.add(Circle::new(50.0))),
-        LightOccluder2d::default(),
+    commands.spawn_scene(bsn! {
+        PointLight2d { color: { Color::WHITE }, intensity: 3.0, outer_radius: 200.0, falloff: 2.0 }
+    });
+
+    let mesh = meshes.add(Circle::new(50.0));
+    commands.spawn_scene(bsn! {
+        Mesh2d(mesh)
+        LightOccluder2d
         Transform::from_xyz(0.0, 200.0, 0.0)
-    ));
+    });
 }
 ```
 
@@ -71,6 +68,7 @@ fn setup(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
 
 | `bevy`   | `bevy_lit`  |
 | -------- | ----------- |
+| `0.19`   | `0.11`      |
 | `0.18`   | `0.10`      |
 | `0.17.3` | `0.9`       |
 | `0.17`   | `0.8`       |
