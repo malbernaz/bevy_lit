@@ -1,15 +1,14 @@
 use bevy::{
-    ecs::{query::QueryItem, system::lifetimeless::Read},
+    ecs::world::World,
     prelude::*,
     render::{
         camera::ExtractedCamera,
         extract_component::{ComponentUniforms, DynamicUniformIndex},
-        render_graph::{NodeRunError, RenderGraphContext, ViewNode},
         render_resource::{
             BindGroupEntries, CachedRenderPipelineId, Operations, PipelineCache,
             RenderPassColorAttachment, RenderPassDescriptor, SamplerDescriptor, UniformBuffer,
         },
-        renderer::{RenderContext, RenderQueue},
+        renderer::{RenderContext, RenderQueue, ViewQuery},
         view::{ExtractedView, ViewTarget, ViewUniformOffset, ViewUniforms},
     },
 };
@@ -23,9 +22,9 @@ use crate::{
     settings::PenetrationSettings,
 };
 
-pub fn run_penetration_pass<'w>(
-    world: &'w World,
-    render_context: &mut RenderContext<'w>,
+pub fn run_penetration_pass(
+    world: &World,
+    render_context: &mut RenderContext,
     camera: &ExtractedCamera,
     lighting_texture: &mut FlipTexture,
     voronoi_texture: &FlipTexture,
@@ -87,9 +86,9 @@ pub fn run_penetration_pass<'w>(
     lighting_texture.flip()
 }
 
-pub fn run_blur_pass<'w>(
-    world: &'w World,
-    render_context: &mut RenderContext<'w>,
+pub fn run_blur_pass(
+    world: &World,
+    render_context: &mut RenderContext,
     lighting_texture: &mut FlipTexture,
     settings_uniform_offset: u32,
     direction: IVec2,
@@ -140,9 +139,9 @@ pub fn run_blur_pass<'w>(
     lighting_texture.flip();
 }
 
-pub fn run_composite_pass<'w>(
-    world: &'w World,
-    render_context: &mut RenderContext<'w>,
+pub fn run_composite_pass(
+    world: &World,
+    render_context: &mut RenderContext,
     lighting_texture: &mut FlipTexture,
     view_target: &ViewTarget,
     pipeline_id: CachedRenderPipelineId,
@@ -192,91 +191,83 @@ pub fn run_composite_pass<'w>(
     pass.draw(0..3, 0..1);
 }
 
-#[derive(Default)]
-pub struct Light2dPostProcessDrawNode;
-impl ViewNode for Light2dPostProcessDrawNode {
-    type ViewQuery = (
-        Read<ExtractedView>,
-        Read<ViewTarget>,
-        Read<ExtractedCamera>,
-        Read<ViewUniformOffset>,
-        Read<Lighting2dCompositePipelineId>,
-        Read<DynamicUniformIndex<ExtractedLighting2dSettings>>,
-        Read<ExtractedLighting2dSettings>,
-    );
+pub fn post_process_render_system(
+    world: &World,
+    view: ViewQuery<(
+        &ExtractedView,
+        &ViewTarget,
+        &ExtractedCamera,
+        &ViewUniformOffset,
+        &Lighting2dCompositePipelineId,
+        &DynamicUniformIndex<ExtractedLighting2dSettings>,
+        &ExtractedLighting2dSettings,
+    )>,
+    mut ctx: RenderContext,
+) {
+    let (
+        view,
+        view_target,
+        camera,
+        view_uniform_offset,
+        composite_pipeline_id,
+        settings_uniform_index,
+        lighting_settings,
+    ) = view.into_inner();
 
-    fn run<'w>(
-        &self,
-        _: &mut RenderGraphContext,
-        render_context: &mut RenderContext<'w>,
-        (
-            view,
-            view_target,
-            camera,
-            view_uniform_offset,
-            composite_pipeline_id,
-            settings_uniform_index,
-            lighting_settings,
-        ): QueryItem<'w, '_, Self::ViewQuery>,
-        world: &'w World,
-    ) -> std::result::Result<(), NodeRunError> {
-        let mut lighting_texture = world
-            .resource::<LightingTextures>()
-            .get(&view.retained_view_entity)
-            .expect(&format!(
-                "Expected the lighting texture for view {:?} to exist",
-                view.retained_view_entity.main_entity.id()
-            ))
-            .clone();
-        let voronoi_texture = world
-            .resource::<VoronoiTextures>()
-            .get(&view.retained_view_entity)
-            .expect(&format!(
-                "Expected the voronoi texture for view {:?} to exist",
-                view.retained_view_entity.main_entity.id()
-            ))
-            .clone();
+    let mut lighting_texture = world
+        .resource::<LightingTextures>()
+        .get(&view.retained_view_entity)
+        .expect(&format!(
+            "Expected the lighting texture for view {:?} to exist",
+            view.retained_view_entity.main_entity.id()
+        ))
+        .clone();
+    let voronoi_texture = world
+        .resource::<VoronoiTextures>()
+        .get(&view.retained_view_entity)
+        .expect(&format!(
+            "Expected the voronoi texture for view {:?} to exist",
+            view.retained_view_entity.main_entity.id()
+        ))
+        .clone();
 
-        if should_run_penetration_pass(&lighting_settings.penetration) {
-            run_penetration_pass(
-                world,
-                render_context,
-                camera,
-                &mut lighting_texture,
-                &voronoi_texture,
-                view_uniform_offset.offset,
-                settings_uniform_index.index(),
-            );
-        }
-
-        if lighting_settings.blur > 0 {
-            run_blur_pass(
-                world,
-                render_context,
-                &mut lighting_texture,
-                settings_uniform_index.index(),
-                IVec2::new(1, 0),
-            );
-            run_blur_pass(
-                world,
-                render_context,
-                &mut lighting_texture,
-                settings_uniform_index.index(),
-                IVec2::new(0, 1),
-            );
-        }
-
-        run_composite_pass(
+    if should_run_penetration_pass(&lighting_settings.penetration) {
+        run_penetration_pass(
             world,
-            render_context,
+            &mut ctx,
+            camera,
             &mut lighting_texture,
-            view_target,
-            composite_pipeline_id.0,
+            &voronoi_texture,
+            view_uniform_offset.offset,
             settings_uniform_index.index(),
         );
-
-        Ok(())
     }
+
+    if lighting_settings.blur > 0 {
+        run_blur_pass(
+            world,
+            &mut ctx,
+            &mut lighting_texture,
+            settings_uniform_index.index(),
+            IVec2::new(1, 0),
+        );
+        run_blur_pass(
+            world,
+            &mut ctx,
+            &mut lighting_texture,
+            settings_uniform_index.index(),
+            IVec2::new(0, 1),
+        );
+    }
+
+    run_composite_pass(
+        world,
+        &mut ctx,
+        &mut lighting_texture,
+        view_target,
+        composite_pipeline_id.0,
+        settings_uniform_index.index(),
+    );
 }
 
 fn should_run_penetration_pass(penetration: &PenetrationSettings) -> bool {

@@ -1,15 +1,15 @@
 use bevy::{
     asset::{embedded_asset, load_embedded_asset, AssetEventSystems},
     core_pipeline::FullscreenShader,
-    ecs::{
-        change_detection::Tick,
-        system::{lifetimeless::SRes, SystemChangeTick, SystemParamItem},
-    },
+    ecs::system::{lifetimeless::SRes, SystemParamItem},
     math::FloatOrd,
+    mesh::Mesh2d,
     mesh::MeshVertexBufferLayoutRef,
+    platform::collections::HashSet,
     prelude::*,
     render::{
         batching::no_gpu_preprocessing::batch_and_prepare_sorted_render_phase,
+        camera::{DirtySpecializationSystems, DirtySpecializations, PendingQueues},
         extract_component::ExtractComponentPlugin,
         mesh::RenderMesh,
         render_asset::{prepare_assets, RenderAssets},
@@ -28,21 +28,19 @@ use bevy::{
         renderer::RenderDevice,
         sync_world::{MainEntity, MainEntityHashMap},
         texture::{FallbackImage, GpuImage},
-        view::{ExtractedView, RenderVisibleEntities},
+        view::{ExtractedView, RenderVisibleEntities, RetainedViewEntity},
         Extract, Render, RenderApp, RenderStartup, RenderSystems,
     },
     sprite_render::{
-        init_mesh_2d_pipeline, DrawMesh2d, EntitiesNeedingSpecialization,
-        EntitySpecializationTickPair, Mesh2dPipeline, Mesh2dPipelineKey, RenderMesh2dInstances,
-        SetMesh2dBindGroup, SetMesh2dViewBindGroup, SpecializedMaterial2dPipelineCache,
-        ViewKeyCache,
+        init_mesh_2d_pipeline, DrawMesh2d, EntitiesNeedingSpecialization, Mesh2dPipeline,
+        Mesh2dPipelineKey, RenderMesh2dInstances, SetMesh2dBindGroup, SetMesh2dViewBindGroup,
+        SpecializedMaterial2dPipelineCache, ViewKeyCache,
     },
     utils::Parallel,
 };
 
 use crate::{
     occlusion::LightOccluder2d,
-    prelude::Lighting2dSettings,
     render::{extract_light2d_phases, VoronoiPhase},
 };
 
@@ -54,15 +52,10 @@ impl Plugin for Voronoi2dPlugin {
         embedded_asset!(app, "flood.wgsl");
 
         app.add_plugins(ExtractComponentPlugin::<LightOccluder2d>::default())
-            .init_resource::<EntitiesNeedingSpecialization<Lighting2dSettings>>()
             .init_resource::<EntitiesNeedingSpecialization<LightOccluder2d>>()
             .add_systems(
                 PostUpdate,
-                (
-                    check_views_needing_specialization,
-                    check_materials_needing_specialization,
-                )
-                    .after(AssetEventSystems),
+                check_occluders_needing_specialization.after(AssetEventSystems),
             );
 
         let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
@@ -75,15 +68,15 @@ impl Plugin for Voronoi2dPlugin {
             .init_resource::<MaskMaterialBindGroups>()
             .init_resource::<DrawFunctions<VoronoiPhase>>()
             .init_resource::<SpecializedMaterial2dPipelineCache<LightOccluder2d>>()
-            .init_resource::<EntitySpecializationTickPair<Lighting2dSettings>>()
-            .init_resource::<EntitySpecializationTickPair<LightOccluder2d>>()
-            .init_resource::<VoronoiViewSpecializationTicks>()
+            .init_resource::<PendingMaskQueues>()
             .add_render_command::<VoronoiPhase, DrawMaskMesh>()
             .add_systems(
                 ExtractSchedule,
                 (
-                    extract_entities_needs_specialization,
-                    extract_views_need_specialization,
+                    extract_occluder_specialization
+                        .in_set(DirtySpecializationSystems::CheckForChanges),
+                    extract_occluder_specializations_removed
+                        .in_set(DirtySpecializationSystems::CheckForRemovals),
                     extract_voronoi_materials,
                 )
                     .after(extract_light2d_phases),
@@ -98,9 +91,11 @@ impl Plugin for Voronoi2dPlugin {
             .add_systems(
                 Render,
                 (
+                    prepare_pending_mask_queues.in_set(RenderSystems::Specialize),
                     specialize_mask_meshes
-                        .in_set(RenderSystems::PrepareMeshes)
-                        .after(prepare_assets::<RenderMesh>),
+                        .in_set(RenderSystems::Specialize)
+                        .after(prepare_assets::<RenderMesh>)
+                        .after(prepare_pending_mask_queues),
                     queue_mask_meshes
                         .in_set(RenderSystems::QueueMeshes)
                         .after(prepare_assets::<RenderMesh>),
@@ -112,31 +107,7 @@ impl Plugin for Voronoi2dPlugin {
     }
 }
 
-pub fn check_views_needing_specialization(
-    needs_specialization: Query<
-        Entity,
-        (
-            Or<(
-                Changed<Camera>,
-                Changed<Lighting2dSettings>,
-                Changed<GlobalTransform>,
-            )>,
-            With<Lighting2dSettings>,
-        ),
-    >,
-    mut par_local: Local<Parallel<Vec<Entity>>>,
-    mut entities_needing_specialization: ResMut<EntitiesNeedingSpecialization<Lighting2dSettings>>,
-) {
-    entities_needing_specialization.clear();
-
-    needs_specialization
-        .par_iter()
-        .for_each(|entity| par_local.borrow_local_mut().push(entity));
-
-    par_local.drain_into(&mut entities_needing_specialization);
-}
-
-pub fn check_materials_needing_specialization(
+pub fn check_occluders_needing_specialization(
     needs_specialization: Query<
         Entity,
         (
@@ -152,52 +123,66 @@ pub fn check_materials_needing_specialization(
     >,
     mut par_local: Local<Parallel<Vec<Entity>>>,
     mut entities_needing_specialization: ResMut<EntitiesNeedingSpecialization<LightOccluder2d>>,
+    mut removed_mesh_2d_components: RemovedComponents<Mesh2d>,
+    mut removed_mask_components: RemovedComponents<LightOccluder2d>,
 ) {
-    entities_needing_specialization.clear();
+    entities_needing_specialization.changed.clear();
+    entities_needing_specialization.removed.clear();
 
     needs_specialization
         .par_iter()
         .for_each(|entity| par_local.borrow_local_mut().push(entity));
 
-    par_local.drain_into(&mut entities_needing_specialization);
-}
+    par_local.drain_into(&mut entities_needing_specialization.changed);
 
-#[derive(Resource, Deref, DerefMut, Default)]
-pub struct VoronoiViewSpecializationTicks(MainEntityHashMap<Tick>);
-
-pub fn extract_views_need_specialization(
-    entities_needing_specialization: Extract<
-        Res<EntitiesNeedingSpecialization<Lighting2dSettings>>,
-    >,
-    mut view_specialization_ticks: ResMut<VoronoiViewSpecializationTicks>,
-    ticks: SystemChangeTick,
-) {
-    for entity in entities_needing_specialization.iter() {
-        view_specialization_ticks.insert((*entity).into(), ticks.this_run());
+    for entity in removed_mesh_2d_components.read().chain(removed_mask_components.read()) {
+        entities_needing_specialization.removed.push(entity);
     }
 }
 
-pub fn extract_entities_needs_specialization(
+/// Temporarily stores voronoi meshes that couldn't be specialized yet because
+/// their mesh/material hadn't loaded.
+///
+/// See the documentation for [`PendingQueues`] for more information.
+#[derive(Default, Deref, DerefMut, Resource)]
+pub struct PendingMaskQueues(pub PendingQueues);
+
+pub fn prepare_pending_mask_queues(
+    mut pending_mask_queues: ResMut<PendingMaskQueues>,
+    views: Query<&ExtractedView>,
+) {
+    let mut all_views: HashSet<RetainedViewEntity> = HashSet::default();
+    for view in &views {
+        all_views.insert(view.retained_view_entity);
+        pending_mask_queues.prepare_for_new_frame(view.retained_view_entity);
+    }
+    pending_mask_queues.expire_stale_views(&all_views);
+}
+
+/// Drains entities that need their specializations updated from the main-world
+/// [`EntitiesNeedingSpecialization`] resource into the render-world
+/// [`DirtySpecializations`] table.
+pub fn extract_occluder_specialization(
     entities_needing_specialization: Extract<Res<EntitiesNeedingSpecialization<LightOccluder2d>>>,
-    mut entity_specialization_ticks: ResMut<EntitySpecializationTickPair<LightOccluder2d>>,
-    mut removed_components: Extract<RemovedComponents<LightOccluder2d>>,
-    mut specialized_view_pipeline_cache: ResMut<
-        SpecializedMaterial2dPipelineCache<LightOccluder2d>,
-    >,
-    views: Query<&MainEntity, With<ExtractedView>>,
-    ticks: SystemChangeTick,
+    mut dirty_specializations: ResMut<DirtySpecializations>,
 ) {
-    for entity in removed_components.read() {
-        entity_specialization_ticks.remove(&MainEntity::from(entity));
-        for view in views {
-            if let Some(cache) = specialized_view_pipeline_cache.get_mut(view) {
-                cache.remove(&MainEntity::from(entity));
-            }
-        }
+    for entity in entities_needing_specialization.changed.iter() {
+        dirty_specializations
+            .changed_renderables
+            .insert(MainEntity::from(*entity));
     }
+}
 
-    for entity in entities_needing_specialization.iter() {
-        entity_specialization_ticks.insert((*entity).into(), ticks.this_run());
+/// Drains entities that need their specializations removed into the
+/// [`DirtySpecializations`] table.
+pub fn extract_occluder_specializations_removed(
+    entities_needing_specialization: Extract<Res<EntitiesNeedingSpecialization<LightOccluder2d>>>,
+    mut dirty_specializations: ResMut<DirtySpecializations>,
+) {
+    for entity in entities_needing_specialization.removed.iter() {
+        dirty_specializations
+            .removed_renderables
+            .insert(MainEntity::from(*entity));
     }
 }
 
@@ -285,63 +270,86 @@ pub fn specialize_mask_meshes(
     mut mask_pipelines: ResMut<SpecializedMeshPipelines<MaskPipeline>>,
     mask_pipeline: Res<MaskPipeline>,
     view_key_cache: Res<ViewKeyCache>,
-    views: Query<(&MainEntity, &RenderVisibleEntities)>,
+    views: Query<(&MainEntity, &ExtractedView, &RenderVisibleEntities)>,
     render_material_instances: Res<RenderVoronoiMaterials>,
+    dirty_specializations: Res<DirtySpecializations>,
+    mut pending_mask_queues: ResMut<PendingMaskQueues>,
     mut specialized_material_pipeline_cache: ResMut<
         SpecializedMaterial2dPipelineCache<LightOccluder2d>,
     >,
-    material_specialization_ticks: Res<EntitySpecializationTickPair<LightOccluder2d>>,
-    view_specialization_ticks: Res<VoronoiViewSpecializationTicks>,
-    ticks: SystemChangeTick,
 ) {
     if render_material_instances.is_empty() {
         return;
     }
 
-    for (view_entity, visible_entities) in &views {
-        let Some(view_key) = view_key_cache.get(view_entity) else {
+    for (view_entity, view, visible_entities) in &views {
+        let Some(views_key) = view_key_cache.get(view_entity) else {
             continue;
         };
-
-        let Some(view_tick) = view_specialization_ticks.get(view_entity) else {
-            continue;
-        };
+        let view_key = *views_key;
 
         let view_specialized_material_pipeline_cache = specialized_material_pipeline_cache
             .entry(*view_entity)
             .or_default();
 
-        for (_, view_entity) in visible_entities.iter::<Mesh2d>() {
-            if !render_material_instances.contains_key(view_entity) {
-                return;
+        let Some(visible_entities) = visible_entities.get::<Mesh2d>() else {
+            continue;
+        };
+
+        // Remove cached pipeline IDs corresponding to entities that either
+        // have been removed or need to be re-specialized.
+        if dirty_specializations.must_wipe_specializations_for_view(view.retained_view_entity) {
+            view_specialized_material_pipeline_cache.clear();
+        } else {
+            for &renderable_entity in dirty_specializations.iter_to_despecialize() {
+                view_specialized_material_pipeline_cache.remove(&renderable_entity);
             }
+        }
 
-            let entity_tick = material_specialization_ticks.get(view_entity).unwrap();
+        let Some(view_pending_mask_queues) =
+            pending_mask_queues.get_mut(&view.retained_view_entity)
+        else {
+            continue;
+        };
 
-            let last_specialized_tick = view_specialized_material_pipeline_cache
-                .get(view_entity)
-                .map(|(tick, _)| *tick);
-
-            let needs_specialization = last_specialized_tick.is_none_or(|tick| {
-                view_tick.is_newer_than(tick, ticks.this_run())
-                    || entity_tick.is_newer_than(tick, ticks.this_run())
-            });
-
-            if !needs_specialization {
+        // Now process all occluder meshes that need to be re-specialized.
+        for (render_entity, visible_entity) in dirty_specializations.iter_to_specialize(
+            view.retained_view_entity,
+            visible_entities,
+            &view_pending_mask_queues.prev_frame,
+        ) {
+            if view_specialized_material_pipeline_cache.contains_key(visible_entity) {
                 continue;
             }
 
-            let Some(mesh_instance) = render_mesh_instances.get_mut(view_entity) else {
+            if !render_material_instances.contains_key(visible_entity) {
+                // Entity doesn't have a light occluder. Skip it.
+                continue;
+            }
+
+            let Some(mesh_instance) = render_mesh_instances.get_mut(visible_entity) else {
                 continue;
             };
             let Some(mesh) = render_meshes.get(mesh_instance.mesh_asset_id) else {
+                // We couldn't fetch the mesh, probably because it hasn't been
+                // loaded yet. Add the entity to the list of pending mask meshes
+                // and bail.
+                view_pending_mask_queues
+                    .current_frame
+                    .insert((*render_entity, *visible_entity));
                 continue;
             };
+
+            let mesh_key = view_key
+                | Mesh2dPipelineKey::from_primitive_topology_and_strip_index(
+                    mesh.primitive_topology(),
+                    mesh.index_format(),
+                );
 
             let pipeline_id = mask_pipelines.specialize(
                 &pipeline_cache,
                 &mask_pipeline,
-                *view_key | Mesh2dPipelineKey::from_primitive_topology(mesh.primitive_topology()),
+                mesh_key,
                 &mesh.layout,
             );
             let pipeline_id = match pipeline_id {
@@ -352,8 +360,7 @@ pub fn specialize_mask_meshes(
                 }
             };
 
-            view_specialized_material_pipeline_cache
-                .insert(*view_entity, (ticks.this_run(), pipeline_id));
+            view_specialized_material_pipeline_cache.insert(*visible_entity, pipeline_id);
         }
     }
 }
@@ -361,51 +368,99 @@ pub fn specialize_mask_meshes(
 pub fn queue_mask_meshes(
     mask_draw_functions: Res<DrawFunctions<VoronoiPhase>>,
     render_meshes: Res<RenderAssets<RenderMesh>>,
-    mut render_mesh_instances: ResMut<RenderMesh2dInstances>,
+    render_mesh_instances: Res<RenderMesh2dInstances>,
     mut mask_render_phase: ResMut<ViewSortedRenderPhases<VoronoiPhase>>,
     views: Query<(&MainEntity, &ExtractedView, &RenderVisibleEntities)>,
     render_material_instances: Res<RenderVoronoiMaterials>,
-    mut specialized_material_pipeline_cache: ResMut<
-        SpecializedMaterial2dPipelineCache<LightOccluder2d>,
-    >,
+    dirty_specializations: Res<DirtySpecializations>,
+    mut pending_mask_queues: ResMut<PendingMaskQueues>,
+    specialized_material_pipeline_cache: ResMut<SpecializedMaterial2dPipelineCache<LightOccluder2d>>,
 ) {
     if render_material_instances.is_empty() {
         return;
     }
 
     for (view_entity, view, visible_entities) in &views {
+        let Some(view_specialized_material_pipeline_cache) =
+            specialized_material_pipeline_cache.get(view_entity)
+        else {
+            continue;
+        };
+
         let Some(mask_phase) = mask_render_phase.get_mut(&view.retained_view_entity) else {
             continue;
         };
 
+        let Some(visible_entities) = visible_entities.get::<Mesh2d>() else {
+            continue;
+        };
+
+        let view_pending_mask_queues = pending_mask_queues
+            .get_mut(&view.retained_view_entity)
+            .expect("View pending mask queues should have been created in `prepare_pending_mask_queues`");
+
         let draw_mask_mesh = mask_draw_functions.read().id::<DrawMaskMesh>();
 
-        let view_specialized_material_pipeline_cache = specialized_material_pipeline_cache
-            .entry(*view_entity)
-            .or_default();
+        // Remove entities that became invisible or fully lost their occluder from
+        // the render phase. Entities that are also in `changed_renderables` are
+        // switching and will be handled by the inline dequeue in the queue loop
+        // below.
+        for main_entity in visible_entities
+            .removed_entities
+            .iter()
+            .map(|(_, main_entity)| main_entity)
+            .chain(
+                dirty_specializations
+                    .removed_renderables
+                    .iter()
+                    .filter(|e| !dirty_specializations.changed_renderables.contains(*e)),
+            )
+        {
+            mask_phase.remove(Entity::PLACEHOLDER, *main_entity);
+        }
 
-        for (render_entity, view_entity) in visible_entities.iter::<Mesh2d>() {
-            if !render_material_instances.contains_key(view_entity) {
-                return;
-            }
-
-            let Some(mesh_instance) = render_mesh_instances.get_mut(view_entity) else {
-                continue;
-            };
-            let Some(mesh) = render_meshes.get(mesh_instance.mesh_asset_id) else {
-                continue;
-            };
-
-            let Some((_, pipeline_id)) = view_specialized_material_pipeline_cache.get(view_entity)
+        // Now iterate over all newly-visible entities and those that need
+        // specialization.
+        for (render_entity, visible_entity) in dirty_specializations.iter_to_queue(
+            view.retained_view_entity,
+            visible_entities,
+            &view_pending_mask_queues.prev_frame,
+        ) {
+            let Some(pipeline_id) = view_specialized_material_pipeline_cache
+                .get(visible_entity)
+                .copied()
             else {
                 continue;
             };
 
-            mask_phase.add(VoronoiPhase {
+            if !render_material_instances.contains_key(visible_entity) {
+                continue;
+            }
+
+            let Some(mesh_instance) = render_mesh_instances.get(visible_entity) else {
+                continue;
+            };
+            let Some(mesh) = render_meshes.get(mesh_instance.mesh_asset_id) else {
+                // We couldn't fetch the mesh, probably because it hasn't been
+                // loaded yet. Add the entity to the list of pending mask meshes
+                // and bail.
+                view_pending_mask_queues
+                    .current_frame
+                    .insert((*render_entity, *visible_entity));
+                continue;
+            };
+
+            // Remove old phase item before re-adding. This handles key changes
+            // and is safe even if the entity wasn't previously queued.
+            mask_phase.remove(Entity::PLACEHOLDER, *visible_entity);
+
+            // Occluders persist between frames; the change-list `remove` above and
+            // the per-removed-entity dequeue handle additions/removals.
+            mask_phase.add_retained(VoronoiPhase {
                 sort_key: FloatOrd(mesh_instance.transforms.world_from_local.translation.z),
-                pipeline: *pipeline_id,
+                pipeline: pipeline_id,
                 draw_function: draw_mask_mesh,
-                entity: (*render_entity, *view_entity),
+                entity: (*render_entity, *visible_entity),
                 batch_range: 0..1,
                 extra_index: PhaseItemExtraIndex::None,
                 indexed: mesh.indexed(),

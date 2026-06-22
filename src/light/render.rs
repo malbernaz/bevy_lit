@@ -222,9 +222,7 @@ pub fn init_light2d_pipeline<L: Light2dMaterial>(
 }
 
 #[derive(Eq, PartialEq, Hash, Clone, Copy)]
-pub struct Light2dPipelineKey {
-    pub hdr: bool,
-}
+pub struct Light2dPipelineKey;
 
 impl<L: Light2dMaterial> SpecializedRenderPipeline for Light2dPipeline<L> {
     type Key = Light2dPipelineKey;
@@ -329,7 +327,9 @@ pub fn queue_light2d_instances<L: Light2dMaterial>(
         view_entities.clear();
         view_entities.extend(
             visible_entities
-                .iter::<L>()
+                .get::<L>()
+                .into_iter()
+                .flat_map(|c| c.iter_visible())
                 .map(|(_, e)| e.index_u32() as usize),
         );
 
@@ -342,11 +342,11 @@ pub fn queue_light2d_instances<L: Light2dMaterial>(
                 continue;
             }
 
-            let view_key = Light2dPipelineKey { hdr: view.hdr };
+            let view_key = Light2dPipelineKey;
 
             let pipeline = pipelines.specialize(&pipeline_cache, &light2d_pipeline, view_key);
 
-            light2d_phase.add(Light2dPhase {
+            light2d_phase.add_transient(Light2dPhase {
                 draw_function: draw_light_function,
                 pipeline,
                 entity: (*render_entity, *main_entity),

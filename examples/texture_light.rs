@@ -13,7 +13,7 @@ fn main() {
         .run();
 }
 
-#[derive(Component)]
+#[derive(Component, Default, Clone)]
 struct CursorLight;
 
 fn setup(
@@ -22,54 +22,46 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
-    commands.spawn((
-        Camera2d,
-        Projection::Orthographic(OrthographicProjection {
-            scaling_mode: ScalingMode::FixedHorizontal {
-                viewport_width: 320.0,
-            },
-            ..OrthographicProjection::default_2d()
-        }),
+    let mut camera = commands.spawn_scene(bsn! {
+        Camera2d
         Lighting2dSettings {
-            raymarch: RaymarchSettings {
-                max_steps: 32,
-                jitter_contrib: 0.0,
-                sharpness: 64.,
-            },
+            raymarch: RaymarchSettings { max_steps: 32, jitter_contrib: 0.0, sharpness: 64. },
             scale: 0.125,
-            ..default()
+        }
+        AmbientLight2d { intensity: 0.2, color: { Color::from(BLUE_300) } }
+    });
+    camera.insert(Projection::Orthographic(OrthographicProjection {
+        scaling_mode: ScalingMode::FixedHorizontal {
+            viewport_width: 320.0,
         },
-        AmbientLight2d {
-            intensity: 0.2,
-            color: Color::from(BLUE_300),
-        },
-    ));
+        ..OrthographicProjection::default_2d()
+    }));
 
-    commands.spawn((
-        CursorLight,
+    let light_mask = asset_server.load("light_mask.png");
+    commands.spawn_scene(bsn! {
+        CursorLight
         TextureLight2d {
-            image: asset_server.load("light_mask.png"),
-            color: Color::from(YELLOW_400),
-            ..default()
-        },
-        Sprite::sized(Vec2::splat(8.0)),
-    ));
+            image: light_mask,
+            color: { Color::from(YELLOW_400) },
+            intensity: 1.0,
+            cast_shadows: true,
+        }
+        Sprite { custom_size: { Some(Vec2::splat(8.0)) } }
+    });
 
     let tile = meshes.add(Rectangle::from_length(16.));
     let material = materials.add(Color::from(GRAY_800));
 
-    commands.spawn((
-        Mesh2d(tile.clone()),
-        MeshMaterial2d(material.clone()),
-        LightOccluder2d::default(),
-        Transform::from_xyz(-16.0, 0.0, 0.0),
-    ));
-    commands.spawn((
-        Mesh2d(tile),
-        MeshMaterial2d(material),
-        LightOccluder2d::default(),
-        Transform::from_xyz(16.0, 0.0, 0.0),
-    ));
+    let tile_a = tile.clone();
+    let material_a = material.clone();
+    commands.spawn_scene(bsn! {
+        Mesh2d(tile_a) MeshMaterial2d::<ColorMaterial>(material_a) LightOccluder2d
+        Transform::from_xyz(-16.0, 0.0, 0.0)
+    });
+    commands.spawn_scene(bsn! {
+        Mesh2d(tile) MeshMaterial2d::<ColorMaterial>(material) LightOccluder2d
+        Transform::from_xyz(16.0, 0.0, 0.0)
+    });
 }
 
 fn update_cursor_light(

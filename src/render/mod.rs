@@ -4,16 +4,16 @@ mod voronoi_node;
 
 use std::ops::Range;
 
+use indexmap::IndexMap;
+
 use bevy::{
-    core_pipeline::core_2d::{
-        extract_core_2d_camera_phases,
-        graph::{Core2d, Node2d},
+    core_pipeline::{
+        core_2d::extract_core_2d_camera_phases, tonemapping::tonemapping, Core2d, Core2dSystems,
     },
     math::FloatOrd,
     platform::collections::{HashMap, HashSet},
     prelude::*,
     render::{
-        render_graph::{RenderGraphExt, RenderLabel, ViewNodeRunner},
         render_phase::{
             CachedRenderPipelinePhaseItem, DrawFunctionId, DrawFunctions, PhaseItem,
             PhaseItemExtraIndex, SortedPhaseItem, ViewSortedRenderPhases,
@@ -33,18 +33,11 @@ use bevy::{
 use crate::{
     post_process::render::ExtractedLighting2dSettings,
     render::{
-        light2d_node::Light2dDrawNode, post_process_node::Light2dPostProcessDrawNode,
-        voronoi_node::VoronoiDrawNode,
+        light2d_node::light2d_render_system, post_process_node::post_process_render_system,
+        voronoi_node::voronoi_render_system,
     },
     settings::Lighting2dSettings,
 };
-
-#[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
-pub enum Light2d {
-    VoronoiPass,
-    LightPass,
-    PostProcessPass,
-}
 
 pub struct Light2dRenderPlugin;
 impl Plugin for Light2dRenderPlugin {
@@ -68,20 +61,16 @@ impl Plugin for Light2dRenderPlugin {
                 Render,
                 prepare_lighting_textures.in_set(RenderSystems::PrepareBindGroups),
             )
-            .add_render_graph_node::<ViewNodeRunner<VoronoiDrawNode>>(Core2d, Light2d::VoronoiPass)
-            .add_render_graph_node::<ViewNodeRunner<Light2dDrawNode>>(Core2d, Light2d::LightPass)
-            .add_render_graph_node::<ViewNodeRunner<Light2dPostProcessDrawNode>>(
-                Core2d,
-                Light2d::PostProcessPass,
-            )
-            .add_render_graph_edges(
+            .add_systems(
                 Core2d,
                 (
-                    Light2d::VoronoiPass,
-                    Light2d::LightPass,
-                    Node2d::EndMainPass,
-                    Light2d::PostProcessPass,
-                    Node2d::EndMainPassPostProcessing,
+                    voronoi_render_system.in_set(Core2dSystems::Prepass),
+                    light2d_render_system
+                        .in_set(Core2dSystems::Prepass)
+                        .after(voronoi_render_system),
+                    post_process_render_system
+                        .in_set(Core2dSystems::PostProcess)
+                        .before(tonemapping),
                 ),
             );
     }
@@ -140,6 +129,12 @@ impl SortedPhaseItem for VoronoiPhase {
     #[inline]
     fn sort_key(&self) -> Self::SortKey {
         self.sort_key
+    }
+
+    fn recalculate_sort_keys(
+        _items: &mut IndexMap<(Entity, MainEntity), Self, bevy::ecs::entity::EntityHash>,
+        _view: &ExtractedView,
+    ) {
     }
 
     fn indexed(&self) -> bool {
@@ -209,6 +204,12 @@ impl SortedPhaseItem for Light2dPhase {
         self.sort_key
     }
 
+    fn recalculate_sort_keys(
+        _items: &mut IndexMap<(Entity, MainEntity), Self, bevy::ecs::entity::EntityHash>,
+        _view: &ExtractedView,
+    ) {
+    }
+
     #[inline]
     fn indexed(&self) -> bool {
         self.indexed
@@ -237,8 +238,8 @@ pub fn extract_light2d_phases(
 
         let retained_view_entity = RetainedViewEntity::new(entity.into(), None, 0);
 
-        mask_phases.insert_or_clear(retained_view_entity);
-        light2d_phases.insert_or_clear(retained_view_entity);
+        mask_phases.prepare_for_new_frame(retained_view_entity);
+        light2d_phases.prepare_for_new_frame(retained_view_entity);
         live_entities.insert(retained_view_entity);
     }
 

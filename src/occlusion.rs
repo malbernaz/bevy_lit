@@ -1,7 +1,7 @@
 use bevy::{asset::AsAssetId, prelude::*, render::extract_component::ExtractComponent};
 
 /// A light occluder component. Should be used alongside a Mesh2d
-#[derive(Component, Clone, Debug, Default, Reflect, ExtractComponent)]
+#[derive(Component, Clone, Debug, Default, Reflect, ExtractComponent, FromTemplate)]
 pub struct LightOccluder2d {
     /// Any texture with a transparent background. The occluder will take it's shape.
     pub occluder_mask: Handle<Image>,
