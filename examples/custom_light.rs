@@ -11,7 +11,7 @@ use bevy::{
 };
 use bevy_lit::prelude::*;
 
-#[derive(Component, Clone, Reflect, AsBindGroup)]
+#[derive(Component, Clone, Reflect, AsBindGroup, FromTemplate)]
 #[require(SyncToRenderWorld, Transform, Visibility, VisibilityClass)]
 #[component(on_add = add_visibility_class::<Self>)]
 pub struct ToonLight2d {
@@ -58,7 +58,7 @@ fn main() {
         .run();
 }
 
-#[derive(Component)]
+#[derive(Component, Default, Clone)]
 struct OccluderCursor;
 
 fn setup(
@@ -66,35 +66,31 @@ fn setup(
     mut images: ResMut<Assets<Image>>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
-    commands.spawn((
-        Camera2d,
+    commands.spawn_scene(bsn! {
+        Camera2d
         Lighting2dSettings {
-            raymarch: RaymarchSettings {
-                jitter_contrib: 0.0,
-                sharpness: 1000.0,
-                ..default()
-            },
-            ..default()
-        },
-        AmbientLight2d {
-            intensity: 0.02,
-            ..default()
-        },
-    ));
-
-    let gradient_map = generate_toon_gradient(5);
-
-    commands.spawn(ToonLight2d {
-        gradient_map: images.add(gradient_map),
-        radius: Vec4::splat(300.0),
-        color: Color::from(YELLOW_100).to_linear(),
+            raymarch: RaymarchSettings { jitter_contrib: 0.0, sharpness: 1000.0 }
+        }
+        AmbientLight2d { intensity: 0.02 }
     });
 
-    commands.spawn((
-        OccluderCursor,
-        Mesh2d(meshes.add(Circle::new(25.0))),
-        LightOccluder2d::default(),
-    ));
+    let gradient_map = images.add(generate_toon_gradient(5));
+
+    commands.spawn_scene(bsn! {
+        ToonLight2d {
+            gradient_map: gradient_map,
+            radius: Vec4::splat(300.0),
+            color: { Color::from(YELLOW_100).to_linear() },
+        }
+    });
+
+    let occluder_mesh = meshes.add(Circle::new(25.0));
+
+    commands.spawn_scene(bsn! {
+        OccluderCursor
+        Mesh2d(occluder_mesh)
+        LightOccluder2d
+    });
 }
 
 fn update_cursor_position(

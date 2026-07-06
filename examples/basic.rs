@@ -1,5 +1,6 @@
 use bevy::{
     color::palettes::tailwind::{BLUE_300, BLUE_600, GRAY_200, GRAY_700, YELLOW_600},
+    input::mouse::MouseButtonInput,
     prelude::*,
     window::PrimaryWindow,
 };
@@ -10,15 +11,15 @@ fn main() {
         .add_plugins((DefaultPlugins, Lighting2dPlugin))
         .insert_resource(ClearColor(Color::from(GRAY_200)))
         .add_systems(Startup, setup)
-        .add_systems(Update, update_cursor_light)
+        .add_systems(Update, (update_cursor_light, despawn_shapes))
         .add_systems(FixedUpdate, update_moving_lights)
         .run();
 }
 
-#[derive(Component)]
+#[derive(Component, Default, Clone)]
 struct CursorLight;
 
-#[derive(Component)]
+#[derive(Component, Default, Clone)]
 struct MovingLights;
 
 const X_EXTENT: f32 = 700.;
@@ -28,23 +29,15 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
-    commands.spawn((
-        Camera2d,
+    commands.spawn_scene(bsn! {
+        Camera2d
         Lighting2dSettings {
             blur: 4,
             edge_intensity: 8.0,
-            raymarch: RaymarchSettings {
-                max_steps: 32,
-                jitter_contrib: 0.5,
-                sharpness: 10.,
-            },
-            ..default()
-        },
-        AmbientLight2d {
-            intensity: 0.1,
-            color: Color::from(BLUE_300),
-        },
-    ));
+            raymarch: RaymarchSettings { max_steps: 32, jitter_contrib: 0.5, sharpness: 10. },
+        }
+        AmbientLight2d { intensity: 0.1, color: { Color::from(BLUE_300) } }
+    });
 
     let shapes = [
         meshes.add(Circle::new(50.0)),
@@ -62,53 +55,48 @@ fn setup(
     let color = materials.add(Color::from(GRAY_700));
     let num_shapes = shapes.len();
 
+    let mut shape_scenes = Vec::new();
     for (i, shape) in shapes.into_iter().enumerate() {
-        commands.spawn((
-            Mesh2d(shape),
-            MeshMaterial2d(color.clone()),
-            LightOccluder2d::default(),
-            Transform::from_xyz(
-                -X_EXTENT / 2. + i as f32 / (num_shapes - 1) as f32 * X_EXTENT,
-                0.0,
-                0.0,
-            ),
-        ));
+        let material = color.clone();
+        let x = -X_EXTENT / 2. + i as f32 / (num_shapes - 1) as f32 * X_EXTENT;
+        shape_scenes.push(bsn! {
+            Mesh2d(shape)
+            MeshMaterial2d::<ColorMaterial>(material)
+            LightOccluder2d
+            Transform::from_xyz(x, 0.0, 0.0)
+        });
     }
+    commands.spawn_scene_list(shape_scenes);
 
-    let moving_point_light = PointLight2d {
-        color: Color::from(BLUE_600),
-        intensity: 2.0,
-        outer_radius: 1100.0,
-        falloff: 3.0,
-        ..default()
-    };
+    commands.spawn_scene(bsn! {
+        MovingLights
+        Transform
+        Visibility
+        Children [
+            PointLight2d {
+                color: { Color::from(BLUE_600) },
+                intensity: 2.0,
+                outer_radius: 1100.0,
+                falloff: 3.0,
+            } Transform::from_xyz(-X_EXTENT + 50. / 2., 0.0, 0.0),
+            PointLight2d {
+                color: { Color::from(BLUE_600) },
+                intensity: 2.0,
+                outer_radius: 1100.0,
+                falloff: 3.0,
+            } Transform::from_xyz(X_EXTENT + 50. / 2., 0.0, 0.0),
+        ]
+    });
 
-    commands.spawn((
-        MovingLights,
-        Transform::default(),
-        Visibility::default(),
-        children![
-            (
-                moving_point_light.clone(),
-                Transform::from_xyz(-X_EXTENT + 50. / 2., 0.0, 0.0),
-            ),
-            (
-                moving_point_light,
-                Transform::from_xyz(X_EXTENT + 50. / 2., 0.0, 0.0),
-            )
-        ],
-    ));
-
-    commands.spawn((
-        CursorLight,
+    commands.spawn_scene(bsn! {
+        CursorLight
         PointLight2d {
-            color: Color::from(YELLOW_600),
+            color: { Color::from(YELLOW_600) },
             intensity: 2.0,
             outer_radius: 400.0,
             falloff: 10.0,
-            ..default()
-        },
-    ));
+        }
+    });
 }
 
 fn update_cursor_light(
@@ -124,6 +112,22 @@ fn update_cursor_light(
         .map(|ray| ray.origin.truncate().extend(0.0))
     {
         point_light_transform.translation = world_position;
+    }
+}
+
+fn despawn_shapes(
+    mut commands: Commands,
+    lights: Query<Entity, With<PointLight2d>>,
+    mut mouse_button_events: MessageReader<MouseButtonInput>,
+) {
+    // Check if any mouse button was pressed
+    for event in mouse_button_events.read() {
+        if event.state.is_pressed() {
+            // Despawn one shape per click
+            if let Some(entity) = lights.iter().next() {
+                commands.entity(entity).despawn();
+            }
+        }
     }
 }
 

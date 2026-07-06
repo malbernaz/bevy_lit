@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.11.0
+
+### Features
+
+- **Bevy 0.19 support** – upgraded to the latest Bevy release
+- **`bsn!` support** – `LightOccluder2d` and `TextureLight2d` now derive `FromTemplate`, making them usable in `bsn!` scenes
+
+### Breaking
+
+- Minimum Bevy version is now 0.19
+
+## 0.10.0
+
+### Features
+
+- **Bevy 0.18 support** – upgraded to the latest Bevy release
+
 ## 0.9.1
 
 ### Fix

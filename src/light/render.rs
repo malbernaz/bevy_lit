@@ -27,9 +27,9 @@ use bevy::{
         },
         render_resource::{
             binding_types::{sampler, texture_2d, uniform_buffer},
-            AsBindGroup, BindGroup, BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries,
-            BlendComponent, BlendFactor, BlendOperation, BlendState, BufferUsages,
-            ColorTargetState, ColorWrites, FragmentState, IndexFormat, PipelineCache,
+            AsBindGroup, BindGroup, BindGroupEntries, BindGroupLayoutDescriptor,
+            BindGroupLayoutEntries, BlendComponent, BlendFactor, BlendOperation, BlendState,
+            BufferUsages, ColorTargetState, ColorWrites, FragmentState, IndexFormat, PipelineCache,
             PreparedBindGroup, RawBufferVec, RenderPipelineDescriptor, SamplerBindingType,
             SamplerDescriptor, ShaderStages, SpecializedRenderPipeline, SpecializedRenderPipelines,
             TextureFormat, TextureSampleType, VertexState, VertexStepMode,
@@ -186,8 +186,8 @@ pub fn calculate_bounds_2d<L: Light2dMaterial>(
 pub struct Light2dPipeline<L: Light2dMaterial> {
     vertex_shader: Handle<Shader>,
     fragment_shader: Handle<Shader>,
-    view_layout: BindGroupLayout,
-    light_layout: BindGroupLayout,
+    view_layout: BindGroupLayoutDescriptor,
+    light_layout: BindGroupLayoutDescriptor,
     marker: PhantomData<L>,
 }
 
@@ -202,7 +202,7 @@ pub fn init_light2d_pipeline<L: Light2dMaterial>(
             Light2dShaderRef::Handle(handle) => handle,
             Light2dShaderRef::Path(path) => asset_server.load(path),
         },
-        view_layout: render_device.create_bind_group_layout(
+        view_layout: BindGroupLayoutDescriptor::new(
             "light2d_view_layout",
             &BindGroupLayoutEntries::sequential(
                 ShaderStages::VERTEX_FRAGMENT,
@@ -216,15 +216,13 @@ pub fn init_light2d_pipeline<L: Light2dMaterial>(
                 ),
             ),
         ),
-        light_layout: L::bind_group_layout(&render_device),
+        light_layout: L::bind_group_layout_descriptor(&render_device),
         marker: PhantomData,
     });
 }
 
 #[derive(Eq, PartialEq, Hash, Clone, Copy)]
-pub struct Light2dPipelineKey {
-    pub hdr: bool,
-}
+pub struct Light2dPipelineKey;
 
 impl<L: Light2dMaterial> SpecializedRenderPipeline for Light2dPipeline<L> {
     type Key = Light2dPipelineKey;
@@ -329,24 +327,26 @@ pub fn queue_light2d_instances<L: Light2dMaterial>(
         view_entities.clear();
         view_entities.extend(
             visible_entities
-                .iter::<L>()
-                .map(|(_, e)| e.index() as usize),
+                .get::<L>()
+                .into_iter()
+                .flat_map(|c| c.iter_visible())
+                .map(|(_, e)| e.index_u32() as usize),
         );
 
         light2d_phase.items.reserve(render_light2d_instances.len());
 
         for ((render_entity, main_entity), render_light) in render_light2d_instances.iter() {
-            let view_index = main_entity.index();
+            let view_index = main_entity.index_u32() as usize;
 
-            if !view_entities.contains(view_index as usize) {
+            if !view_entities.contains(view_index) {
                 continue;
             }
 
-            let view_key = Light2dPipelineKey { hdr: view.hdr };
+            let view_key = Light2dPipelineKey;
 
             let pipeline = pipelines.specialize(&pipeline_cache, &light2d_pipeline, view_key);
 
-            light2d_phase.add(Light2dPhase {
+            light2d_phase.add_transient(Light2dPhase {
                 draw_function: draw_light_function,
                 pipeline,
                 entity: (*render_entity, *main_entity),
@@ -369,6 +369,7 @@ pub fn prepare_light2d_view_bind_groups<L: Light2dMaterial>(
     render_device: Res<RenderDevice>,
     light2d_pipeline: Res<Light2dPipeline<L>>,
     view_uniforms: Res<ViewUniforms>,
+    pipeline_cache: Res<PipelineCache>,
     voronoi_textures: Res<VoronoiTextures>,
     lighting2d_settings: Res<ComponentUniforms<ExtractedLighting2dSettings>>,
     views: Query<(Entity, &ExtractedView)>,
@@ -389,7 +390,7 @@ pub fn prepare_light2d_view_bind_groups<L: Light2dMaterial>(
 
         let view_bind_group = render_device.create_bind_group(
             "light2d_view_bind_group",
-            &light2d_pipeline.view_layout,
+            &pipeline_cache.get_bind_group_layout(&light2d_pipeline.view_layout),
             &BindGroupEntries::sequential((
                 view_binding.clone(),
                 lighting_settings_binding.clone(),
@@ -467,6 +468,7 @@ pub fn prepare_light2d_buffers<L: Light2dMaterial>(
     render_queue: Res<RenderQueue>,
     render_lights2d: Res<RenderLights2dInstances<L>>,
     render_images: Res<RenderAssets<GpuImage>>,
+    pipeline_cache: Res<PipelineCache>,
     mut light2d_meta: ResMut<Light2dMeta<L>>,
     mut phases: ResMut<ViewSortedRenderPhases<Light2dPhase>>,
     mut light2d_bind_groups: ResMut<PreparedLight2dMaterialBindGroups<L>>,
@@ -485,8 +487,9 @@ pub fn prepare_light2d_buffers<L: Light2dMaterial>(
             };
 
             let Ok(prepared_bind_group) = light.instance.as_bind_group(
-                &L::bind_group_layout(&render_device),
+                &L::bind_group_layout_descriptor(&render_device),
                 &render_device,
+                &pipeline_cache,
                 &mut system_param,
             ) else {
                 continue;
@@ -610,7 +613,6 @@ impl<P: PhaseItem, L: Light2dMaterial> RenderCommand<P> for DrawLight2dBatch<L> 
 
         pass.set_index_buffer(
             light2d_meta.index_buffer.buffer().unwrap().slice(..),
-            0,
             IndexFormat::Uint32,
         );
         pass.set_vertex_buffer(0, light2d_meta.instance_buffer.buffer().unwrap().slice(..));

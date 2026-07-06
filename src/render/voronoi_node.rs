@@ -1,27 +1,27 @@
 use bevy::{
-    ecs::{query::QueryItem, system::lifetimeless::Read, world::World},
+    ecs::world::World,
     prelude::*,
     render::{
         camera::ExtractedCamera,
-        render_graph::{NodeRunError, RenderGraphContext, ViewNode},
         render_phase::{SortedRenderPhase, ViewSortedRenderPhases},
         render_resource::{
             BindGroupEntries, Operations, PipelineCache, RenderPassColorAttachment,
             RenderPassDescriptor, SamplerDescriptor, UniformBuffer,
         },
-        renderer::{RenderContext, RenderQueue},
+        renderer::{RenderContext, RenderQueue, ViewQuery},
         view::{ExtractedView, ViewTarget},
     },
 };
 
 use crate::{
     render::{FlipTexture, VoronoiPhase, VoronoiTextures},
-    voronoi::FloodPipeline, wrappers::UVec2Uniform,
+    voronoi::FloodPipeline,
+    wrappers::UVec2Uniform,
 };
 
 pub fn run_mask_pass<'w>(
     world: &'w World,
-    render_context: &mut RenderContext<'w>,
+    render_context: &mut RenderContext,
     phase: &SortedRenderPhase<VoronoiPhase>,
     view_entity: &Entity,
     voronoi_texture: &mut FlipTexture,
@@ -49,13 +49,14 @@ pub fn run_mask_pass<'w>(
     voronoi_texture.flip();
 }
 
-pub fn run_flood_seed_pass<'w>(
-    world: &'w World,
-    render_context: &mut RenderContext<'w>,
+pub fn run_flood_seed_pass(
+    world: &World,
+    render_context: &mut RenderContext,
     camera: &ExtractedCamera,
     voronoi_texture: &mut FlipTexture,
 ) {
     let flood_pipeline = world.resource::<FloodPipeline>();
+    let pipeline_cache = world.resource::<PipelineCache>();
 
     let Some(pipeline) = world
         .resource::<PipelineCache>()
@@ -70,7 +71,7 @@ pub fn run_flood_seed_pass<'w>(
 
     let bind_group = render_context.render_device().create_bind_group(
         "flood_seed_bind_group",
-        &flood_pipeline.seed_layout,
+        &pipeline_cache.get_bind_group_layout(&flood_pipeline.seed_layout),
         &BindGroupEntries::sequential((&voronoi_texture.input().default_view, &sampler)),
     );
 
@@ -96,14 +97,15 @@ pub fn run_flood_seed_pass<'w>(
     voronoi_texture.flip();
 }
 
-pub fn run_flood_pass<'w>(
-    world: &'w World,
-    render_context: &mut RenderContext<'w>,
+pub fn run_flood_pass(
+    world: &World,
+    render_context: &mut RenderContext,
     camera: &ExtractedCamera,
     voronoi_texture: &mut FlipTexture,
     step: UVec2Uniform,
 ) {
     let flood_pipeline = world.resource::<FloodPipeline>();
+    let pipeline_cache = world.resource::<PipelineCache>();
 
     let mut step = UniformBuffer::from(step);
 
@@ -127,7 +129,7 @@ pub fn run_flood_pass<'w>(
 
     let bind_group = render_context.render_device().create_bind_group(
         "flood_bind_group",
-        &flood_pipeline.layout,
+        &pipeline_cache.get_bind_group_layout(&flood_pipeline.layout),
         &BindGroupEntries::sequential((&voronoi_texture.input().default_view, &sampler, step)),
     );
 
@@ -153,80 +155,69 @@ pub fn run_flood_pass<'w>(
     voronoi_texture.flip();
 }
 
-#[derive(Default)]
-pub struct VoronoiDrawNode;
-impl ViewNode for VoronoiDrawNode {
-    type ViewQuery = (Read<ExtractedCamera>, Read<ExtractedView>, Read<ViewTarget>);
+pub fn voronoi_render_system(
+    world: &World,
+    view: ViewQuery<(&ExtractedCamera, &ExtractedView, &ViewTarget)>,
+    mask_phases: Res<ViewSortedRenderPhases<VoronoiPhase>>,
+    mut ctx: RenderContext,
+) {
+    let view_entity = view.entity();
+    let (camera, view, target) = view.into_inner();
 
-    fn run<'w>(
-        &self,
-        graph: &mut RenderGraphContext,
-        render_context: &mut RenderContext<'w>,
-        (camera, view, target): QueryItem<'w, '_, Self::ViewQuery>,
-        world: &'w World,
-    ) -> Result<(), NodeRunError> {
-        let view_entity = graph.view_entity();
+    let Some(mask_phase) = mask_phases.get(&view.retained_view_entity) else {
+        return;
+    };
 
-        let Some(mask_phase) = world
-            .resource::<ViewSortedRenderPhases<VoronoiPhase>>()
-            .get(&view.retained_view_entity)
-        else {
-            return Ok(());
-        };
+    if mask_phase.items.is_empty() {
+        return;
+    }
 
-        if mask_phase.items.is_empty() {
-            return Ok(());
-        }
+    let mut voronoi_texture = world
+        .resource::<VoronoiTextures>()
+        .get(&view.retained_view_entity)
+        .cloned()
+        .expect(&format!(
+            "Expected the voronoi texture for {:?} exist",
+            view.retained_view_entity.main_entity.id()
+        ));
 
-        let mut voronoi_texture = world
-            .resource::<VoronoiTextures>()
-            .get(&view.retained_view_entity)
-            .expect(&format!(
-                "Expected the voronoi texture for {:?} exist",
-                view.retained_view_entity.main_entity.id()
-            ))
-            .clone();
+    run_mask_pass(
+        world,
+        &mut ctx,
+        mask_phase,
+        &view_entity,
+        &mut voronoi_texture,
+        camera,
+    );
 
-        run_mask_pass(
-            world,
-            render_context,
-            mask_phase,
-            &view_entity,
-            &mut voronoi_texture,
-            camera,
-        );
+    run_flood_seed_pass(world, &mut ctx, camera, &mut voronoi_texture);
 
-        run_flood_seed_pass(world, render_context, camera, &mut voronoi_texture);
+    let width = target.main_texture().width();
+    let height = target.main_texture().height();
+    let max_dim = width.max(height);
+    let mut step = max_dim / 2;
 
-        let width = target.main_texture().width();
-        let height = target.main_texture().height();
-        let max_dim = width.max(height);
-        let mut step = max_dim / 2;
+    while step >= 1 {
+        let x_step = (step * width) / max_dim;
+        let y_step = (step * height) / max_dim;
 
-        while step >= 1 {
-            let x_step = (step * width) / max_dim;
-            let y_step = (step * height) / max_dim;
-
-            run_flood_pass(
-                world,
-                render_context,
-                camera,
-                &mut voronoi_texture,
-                UVec2Uniform::new(x_step.max(1), y_step.max(1)),
-            );
-
-            step /= 2;
-        }
-
-        // Addicional pass with step = 1 to improve accuracy
         run_flood_pass(
             world,
-            render_context,
+            &mut ctx,
             camera,
             &mut voronoi_texture,
-            UVec2Uniform::new(1, 1),
+            UVec2Uniform::new(x_step.max(1), y_step.max(1)),
         );
 
-        Ok(())
+        step /= 2;
     }
+
+    // Additional pass with step = 1 to improve accuracy
+    run_flood_pass(
+        world,
+        &mut ctx,
+        camera,
+        &mut voronoi_texture,
+        UVec2Uniform::new(1, 1),
+    );
 }

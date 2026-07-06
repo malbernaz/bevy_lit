@@ -14,7 +14,7 @@ fn main() {
         .run();
 }
 
-#[derive(Component)]
+#[derive(Component, Default, Clone)]
 struct CursorLight;
 
 fn setup(
@@ -22,8 +22,8 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
-    commands.spawn((
-        Camera2d,
+    commands.spawn_scene(bsn! {
+        Camera2d
         Lighting2dSettings {
             penetration: PenetrationSettings {
                 max: 20.0,
@@ -32,40 +32,30 @@ fn setup(
                 sample_directions: 16,
                 sample_steps: 8,
             },
-            ..default()
-        },
-        AmbientLight2d {
-            intensity: 0.2,
-            ..default()
-        },
-    ));
+        }
+        AmbientLight2d { intensity: 0.2 }
+    });
 
-    commands.spawn((
-        PointLight2d {
-            intensity: 4.0,
-            outer_radius: 512.0,
-            ..default()
-        },
-        CursorLight,
-        Transform::default().with_rotation(Quat::from_rotation_z(-90_f32.to_radians())),
-    ));
+    commands.spawn_scene(bsn! {
+        PointLight2d { intensity: 4.0, outer_radius: 512.0 }
+        CursorLight
+        Transform { rotation: { Quat::from_rotation_z(-90_f32.to_radians()) } }
+    });
 
     let rect = meshes.add(Rectangle::from_length(100.));
     let material = materials.add(Color::from(GRAY_200));
 
-    commands.spawn((
-        Mesh2d(rect.clone()),
-        MeshMaterial2d(material.clone()),
-        LightOccluder2d::default(),
-        Transform::from_xyz(-100., 0., 0.),
-    ));
+    let rect_a = rect.clone();
+    let material_a = material.clone();
+    commands.spawn_scene(bsn! {
+        Mesh2d(rect_a) MeshMaterial2d::<ColorMaterial>(material_a) LightOccluder2d
+        Transform::from_xyz(-100., 0., 0.)
+    });
 
-    commands.spawn((
-        Mesh2d(rect),
-        MeshMaterial2d(material),
-        LightOccluder2d::default(),
-        Transform::from_xyz(100., 0., 0.),
-    ));
+    commands.spawn_scene(bsn! {
+        Mesh2d(rect) MeshMaterial2d::<ColorMaterial>(material) LightOccluder2d
+        Transform::from_xyz(100., 0., 0.)
+    });
 }
 
 fn update_cursor_light(

@@ -5,14 +5,14 @@ use bevy::{
     render::{
         render_resource::{
             binding_types::{sampler, texture_2d, uniform_buffer},
-            BindGroupLayout, BindGroupLayoutEntries, BindGroupLayoutEntry, CachedRenderPipelineId,
-            ColorTargetState, ColorWrites, FragmentState, PipelineCache, RenderPipelineDescriptor,
-            SamplerBindingType, ShaderStages, ShaderType, SpecializedRenderPipeline,
-            SpecializedRenderPipelines, TextureFormat, TextureSampleType,
+            BindGroupLayoutDescriptor, BindGroupLayoutEntries, BindGroupLayoutEntry,
+            CachedRenderPipelineId, ColorTargetState, ColorWrites, FragmentState, PipelineCache,
+            RenderPipelineDescriptor, SamplerBindingType, ShaderStages, ShaderType,
+            SpecializedRenderPipeline, SpecializedRenderPipelines, TextureFormat,
+            TextureSampleType,
         },
-        renderer::RenderDevice,
         sync_world::RenderEntity,
-        view::{ExtractedView, ViewTarget, ViewUniform},
+        view::{ExtractedView, ViewUniform},
         Extract,
     },
     shader::Shader,
@@ -25,24 +25,20 @@ use crate::{
 
 #[derive(Resource)]
 pub struct Lighting2dPostProcessPipelines {
-    pub penetration_layout: BindGroupLayout,
+    pub penetration_layout: BindGroupLayoutDescriptor,
     pub penetration_pipeline: CachedRenderPipelineId,
-    pub blur_layout: BindGroupLayout,
+    pub blur_layout: BindGroupLayoutDescriptor,
     pub blur_pipeline: CachedRenderPipelineId,
 }
 
 fn create_post_process_pipeline(
-    render_device: &RenderDevice,
     pipeline_cache: &PipelineCache,
     fullscreen_shader: &FullscreenShader,
     label: &'static str,
     shader: Handle<Shader>,
     entries: &[BindGroupLayoutEntry],
-) -> (BindGroupLayout, CachedRenderPipelineId) {
-    let layout = render_device.create_bind_group_layout(
-        &(String::from(label) + "_bind_group_layout") as &str,
-        entries,
-    );
+) -> (BindGroupLayoutDescriptor, CachedRenderPipelineId) {
+    let layout = BindGroupLayoutDescriptor::new(label, entries);
 
     let pipeline = pipeline_cache.queue_render_pipeline(RenderPipelineDescriptor {
         label: Some((String::from(label) + "_pipeline").into()),
@@ -58,7 +54,7 @@ fn create_post_process_pipeline(
                 write_mask: ColorWrites::ALL,
             })],
         }),
-        push_constant_ranges: vec![],
+        immediate_size: 0,
         primitive: Default::default(),
         depth_stencil: None,
         multisample: Default::default(),
@@ -70,16 +66,14 @@ fn create_post_process_pipeline(
 
 pub fn init_post_process_pipelines(
     mut commands: Commands,
-    render_device: Res<RenderDevice>,
     pipeline_cache: Res<PipelineCache>,
     asset_server: Res<AssetServer>,
     fullscreen_shader: Res<FullscreenShader>,
 ) {
     let (penetration_layout, penetration_pipeline) = create_post_process_pipeline(
-        &render_device,
         &pipeline_cache,
         &fullscreen_shader,
-        "penetration",
+        "penetration_bind_group_layout",
         load_embedded_asset!(asset_server.as_ref(), "penetration.wgsl"),
         &BindGroupLayoutEntries::sequential(
             ShaderStages::FRAGMENT,
@@ -94,10 +88,9 @@ pub fn init_post_process_pipelines(
     );
 
     let (blur_layout, blur_pipeline) = create_post_process_pipeline(
-        &render_device,
         &pipeline_cache,
         &fullscreen_shader,
-        "blur",
+        "blur_bind_group_layout",
         load_embedded_asset!(asset_server.as_ref(), "blur.wgsl"),
         &BindGroupLayoutEntries::sequential(
             ShaderStages::FRAGMENT,
@@ -119,21 +112,20 @@ pub fn init_post_process_pipelines(
 
 #[derive(Resource)]
 pub struct Lighting2dCompositePipeline {
-    pub layout: BindGroupLayout,
+    pub layout: BindGroupLayoutDescriptor,
     pub shader: Handle<Shader>,
     pub fullscreen_shader: FullscreenShader,
 }
 
 pub fn init_lighting2d_composite_pipeline(
     mut commands: Commands,
-    render_device: Res<RenderDevice>,
     asset_server: Res<AssetServer>,
     fullscreen_shader: Res<FullscreenShader>,
 ) {
     commands.insert_resource(Lighting2dCompositePipeline {
         shader: load_embedded_asset!(asset_server.as_ref(), "composite.wgsl"),
         fullscreen_shader: fullscreen_shader.clone(),
-        layout: render_device.create_bind_group_layout(
+        layout: BindGroupLayoutDescriptor::new(
             "composite_bind_group_layout",
             &BindGroupLayoutEntries::sequential(
                 ShaderStages::FRAGMENT,
@@ -150,7 +142,7 @@ pub fn init_lighting2d_composite_pipeline(
 
 #[derive(Eq, PartialEq, Hash, Clone, Copy)]
 pub struct Lighting2dPipelineKey {
-    pub hdr: bool,
+    pub target_format: TextureFormat,
     pub msaa_samples: u32,
 }
 
@@ -167,11 +159,7 @@ impl SpecializedRenderPipeline for Lighting2dCompositePipeline {
                 shader_defs: vec![],
                 entry_point: Some("fragment".into()),
                 targets: vec![Some(ColorTargetState {
-                    format: if key.hdr {
-                        ViewTarget::TEXTURE_FORMAT_HDR
-                    } else {
-                        TextureFormat::bevy_default()
-                    },
+                    format: key.target_format,
                     blend: None,
                     write_mask: ColorWrites::ALL,
                 })],
@@ -179,7 +167,7 @@ impl SpecializedRenderPipeline for Lighting2dCompositePipeline {
             primitive: Default::default(),
             depth_stencil: None,
             multisample: Default::default(),
-            push_constant_ranges: vec![],
+            immediate_size: 0,
             zero_initialize_workgroup_memory: false,
         }
     }
@@ -187,7 +175,7 @@ impl SpecializedRenderPipeline for Lighting2dCompositePipeline {
 
 #[derive(Component, Clone, ShaderType)]
 pub struct ExtractedLighting2dSettings {
-    #[size(16)]
+    #[shader(size(16))]
     pub raymarch: RaymarchSettings,
     pub penetration: PenetrationSettings,
     pub ambient_light: LinearRgba,
@@ -234,7 +222,7 @@ pub fn prepare_composite_pipelines(
                     &pipeline_cache,
                     &composite_pipeline,
                     Lighting2dPipelineKey {
-                        hdr: view.hdr,
+                        target_format: view.target_format,
                         msaa_samples: msaa.samples(),
                     },
                 ),
