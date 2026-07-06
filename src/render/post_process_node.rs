@@ -20,6 +20,7 @@ use crate::{
     },
     render::{FlipTexture, LightingTextures, VoronoiTextures},
     settings::PenetrationSettings,
+    wrappers::IVec2Uniform,
 };
 
 pub fn run_penetration_pass(
@@ -91,7 +92,7 @@ pub fn run_blur_pass(
     render_context: &mut RenderContext,
     lighting_texture: &mut FlipTexture,
     settings_uniform_offset: u32,
-    direction: IVec2,
+    direction: IVec2Uniform,
 ) {
     let post_process_pipelines = world.resource::<Lighting2dPostProcessPipelines>();
     let pipeline_cache = world.resource::<PipelineCache>();
@@ -249,14 +250,14 @@ pub fn post_process_render_system(
             &mut ctx,
             &mut lighting_texture,
             settings_uniform_index.index(),
-            IVec2::new(1, 0),
+            IVec2Uniform::new(1, 0),
         );
         run_blur_pass(
             world,
             &mut ctx,
             &mut lighting_texture,
             settings_uniform_index.index(),
-            IVec2::new(0, 1),
+            IVec2Uniform::new(0, 1),
         );
     }
 

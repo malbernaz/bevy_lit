@@ -18,7 +18,10 @@ use bevy::{
     shader::Shader,
 };
 
-use crate::settings::{AmbientLight2d, Lighting2dSettings, PenetrationSettings, RaymarchSettings};
+use crate::{
+    settings::{AmbientLight2d, Lighting2dSettings, PenetrationSettings, RaymarchSettings},
+    wrappers::IVec2Uniform,
+};
 
 #[derive(Resource)]
 pub struct Lighting2dPostProcessPipelines {
@@ -93,7 +96,7 @@ pub fn init_post_process_pipelines(
             ShaderStages::FRAGMENT,
             (
                 uniform_buffer::<ExtractedLighting2dSettings>(true),
-                uniform_buffer::<IVec2>(false),
+                uniform_buffer::<IVec2Uniform>(false),
                 texture_2d(TextureSampleType::Float { filterable: true }),
             ),
         ),

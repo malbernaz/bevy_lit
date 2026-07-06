@@ -19,6 +19,7 @@ impl Plugin for Lighting2dPlugin {
     fn build(&self, app: &mut App) {
         load_shader_library!(app, "view_transformations.wgsl");
         load_shader_library!(app, "settings_types.wgsl");
+        load_shader_library!(app, "wrappers_types.wgsl");
 
         app.add_plugins((
             Light2dRenderPlugin,
